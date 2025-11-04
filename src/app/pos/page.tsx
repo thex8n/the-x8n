@@ -1,7 +1,0 @@
-export default function POS() {
-  return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold text-gray-900">Terminal POS</h1>
-    </div>
-  )
-}

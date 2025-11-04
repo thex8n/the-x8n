@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, BarChart3, Package, CreditCard, Settings, Menu, Sun, Moon, LucideIcon, MoreVertical } from 'lucide-react'
+import { useSidebar } from '@/contexts/SidebarContext'
 
 interface NavItem {
   href: string
@@ -62,7 +63,7 @@ interface SidebarProps {
 
 export default function Sidebar({ userName = 'Usuario', userInitials = 'U' }: SidebarProps) {
   const pathname = usePathname()
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const { isCollapsed, toggle } = useSidebar()
   const [isDarkMode, setIsDarkMode] = useState(false)
 
   const sidebarWidth = isCollapsed ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded
@@ -71,7 +72,7 @@ export default function Sidebar({ userName = 'Usuario', userInitials = 'U' }: Si
     <aside className={`${sidebarWidth} bg-white min-h-screen flex flex-col border-r border-gray-200 transition-all duration-300 ease-in-out`}>
       <div className="h-16 flex items-center px-3 gap-4 overflow-hidden">
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={toggle}
           className="w-12 h-12 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors shrink-0"
           aria-label={isCollapsed ? 'Expandir menú' : 'Colapsar menú'}
         >

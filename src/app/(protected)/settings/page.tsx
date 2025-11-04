@@ -1,0 +1,10 @@
+export default function SettingsPage() {
+  return (
+    <div className="p-8">
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Ajustes</h1>
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <p className="text-gray-600">Configuración de la aplicación</p>
+      </div>
+    </div>
+  )
+}
