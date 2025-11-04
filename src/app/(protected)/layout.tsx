@@ -1,4 +1,5 @@
 import Sidebar from '@/components/layout/Sidebar'
+import MobileTabBar from '@/components/layout/MobileTabBar'
 import { getUser } from '@/app/actions/auth'
 import { SidebarProvider } from '@/contexts/SidebarContext'
 
@@ -19,12 +20,18 @@ export default async function ProtectedLayout({
 
   return (
     <SidebarProvider>
-      <div className="flex">
+      <div className="flex min-h-screen">
+        {/* Sidebar para desktop - se oculta en móvil */}
         <Sidebar userName={userName} userInitials={userInitials} />
-        <main className="flex-1 bg-gray-50 min-h-screen">
+        
+        {/* Main content con padding bottom para el TabBar móvil */}
+        <main className="flex-1 bg-gray-50 min-h-screen pb-24 md:pb-0">
           {children}
         </main>
       </div>
+      
+      {/* TabBar para móvil - FUERA del flex container */}
+      <MobileTabBar />
     </SidebarProvider>
   )
 }

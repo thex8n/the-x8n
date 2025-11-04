@@ -69,8 +69,7 @@ export default function Sidebar({ userName = 'Usuario', userInitials = 'U' }: Si
   const sidebarWidth = isCollapsed ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded
 
   return (
-    <aside className={`${sidebarWidth} bg-white min-h-screen flex flex-col border-r border-gray-200 transition-all duration-300 ease-in-out`}>
-      <div className="h-16 flex items-center px-3 gap-4 overflow-hidden">
+<aside className={`hidden md:flex ${sidebarWidth} bg-white min-h-screen flex-col border-r border-gray-200 transition-all duration-300 ease-in-out`}>      <div className="h-16 flex items-center px-3 gap-4 overflow-hidden">
         <button
           onClick={toggle}
           className="w-12 h-12 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors shrink-0"
