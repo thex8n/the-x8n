@@ -131,12 +131,11 @@ export default function BarcodeScannerScreen({
       console.error('Scanner error:', error)
     },
     constraints: {
-      video: {
-        facingMode: 'environment',
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      }
-    }
+      video: true,
+      audio: false
+    },
+    timeBetweenDecodingAttempts: 300,
+    paused: !isScanning
   })
 
   if (hasPermission === null) {
@@ -208,10 +207,14 @@ export default function BarcodeScannerScreen({
           </button>
         </div>
 
-        <div className="flex-1 relative bg-black">
+        <div className="flex-1 relative bg-black overflow-hidden">
           <video
             ref={ref}
+            autoPlay
+            playsInline
+            muted
             className="w-full h-full object-cover"
+            style={{ transform: 'scaleX(-1)' }}
           />
 
           <div className="absolute inset-0 pointer-events-none">
