@@ -154,3 +154,75 @@ export async function searchProducts(query: string) {
 
   return { success: true, data: products }
 }
+
+export async function findProductByCode(code: string) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: 'No autenticado' }
+  }
+
+  const { data: product, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      category:categories(id, name, color, icon)
+    `)
+    .eq('code', code)
+    .eq('user_id', user.id)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return { success: true, data: null }
+    }
+    console.error('Error finding product:', error)
+    return { error: error.message }
+  }
+
+  return { success: true, data: product }
+}
+
+export async function incrementProductStock(productId: string) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: 'No autenticado' }
+  }
+
+  const { data: product, error: fetchError } = await supabase
+    .from('products')
+    .select('stock_quantity')
+    .eq('id', productId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (fetchError) {
+    console.error('Error fetching product:', fetchError)
+    return { error: fetchError.message }
+  }
+
+  const newStock = product.stock_quantity + 1
+
+  const { data: updatedProduct, error: updateError } = await supabase
+    .from('products')
+    .update({ stock_quantity: newStock })
+    .eq('id', productId)
+    .select(`
+      *,
+      category:categories(id, name, color, icon)
+    `)
+    .single()
+
+  if (updateError) {
+    console.error('Error updating stock:', updateError)
+    return { error: updateError.message }
+  }
+
+  revalidatePath('/inventory')
+  return { success: true, data: updatedProduct }
+}

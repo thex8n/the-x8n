@@ -11,9 +11,10 @@ import AddCategoryForm from './AddCategoryForm'
 interface AddProductFormProps {
   onClose: () => void
   onSuccess: () => void
+  initialCode?: string | null
 }
 
-export default function AddProductForm({ onClose, onSuccess }: AddProductFormProps) {
+export default function AddProductForm({ onClose, onSuccess, initialCode }: AddProductFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
@@ -21,7 +22,7 @@ export default function AddProductForm({ onClose, onSuccess }: AddProductFormPro
 
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
-    code: '',
+    code: initialCode || '',
     category_id: null,
     stock_quantity: 0,
     minimum_stock: 0,
@@ -34,6 +35,12 @@ export default function AddProductForm({ onClose, onSuccess }: AddProductFormPro
   useEffect(() => {
     loadCategories()
   }, [])
+
+  useEffect(() => {
+    if (initialCode) {
+      setFormData(prev => ({ ...prev, code: initialCode }))
+    }
+  }, [initialCode])
 
   const loadCategories = async () => {
     const result = await getCategories()

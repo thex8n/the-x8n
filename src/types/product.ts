@@ -9,6 +9,7 @@ export interface Product {
   sale_price: number | null
   cost_price: number | null
   unit_of_measure: string | null
+  image_url: string | null
   active: boolean
   created_at: string
   updated_at: string
@@ -23,6 +24,7 @@ export interface ProductFormData {
   sale_price?: number
   cost_price?: number
   unit_of_measure?: string
+  image_url?: string | null
   active: boolean
 }
 
