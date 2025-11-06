@@ -6,7 +6,8 @@
       "Bash(xargs ls:*)",
       "Bash(tree:*)",
       "Bash(ls:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useZxing } from 'react-zxing'
+import { useState, useEffect, useRef } from 'react'
+import { Html5Qrcode } from 'html5-qrcode'
 import { X, Scan, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { findProductByCode, incrementProductStock } from '@/app/actions/products'
@@ -18,21 +18,19 @@ export default function BarcodeScannerScreen({
 }: BarcodeScannerScreenProps) {
   const [isScanning, setIsScanning] = useState(true)
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null)
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null)
-  const [permissionError, setPermissionError] = useState<string | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
+  const [scannerError, setScannerError] = useState<string | null>(null)
+  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const qrCodeRegionId = 'qr-reader'
 
-  const handleScan = async (result: any) => {
-    if (!isScanning) return
+  const handleScan = async (decodedText: string) => {
+    if (!isScanning || decodedText === lastScannedCode) return
 
-    const code = result.getText()
-
-    if (code === lastScannedCode) return
-
-    setLastScannedCode(code)
+    setLastScannedCode(decodedText)
     setIsScanning(false)
 
     try {
-      const response = await findProductByCode(code)
+      const response = await findProductByCode(decodedText)
 
       if (response.error) {
         toast.error('Error al buscar el producto')
@@ -46,7 +44,10 @@ export default function BarcodeScannerScreen({
           icon: '📦',
           duration: 2000,
         })
-        onProductNotFound(code)
+        if (scannerRef.current) {
+          await scannerRef.current.stop()
+        }
+        onProductNotFound(decodedText)
         return
       }
 
@@ -89,74 +90,67 @@ export default function BarcodeScannerScreen({
   }
 
   useEffect(() => {
-    const checkPermissions = async () => {
+    const initScanner = async () => {
       try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          setPermissionError('Tu navegador no soporta acceso a la cámara. Usa Chrome o Safari en mobile.')
-          setHasPermission(false)
-          return
-        }
+        const html5QrCode = new Html5Qrcode(qrCodeRegionId)
+        scannerRef.current = html5QrCode
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+          },
+          (decodedText) => {
+            handleScan(decodedText)
+          },
+          (errorMessage) => {
+            console.log('Scanning...', errorMessage)
           }
-        })
+        )
 
-        stream.getTracks().forEach(track => track.stop())
-        setHasPermission(true)
+        setIsInitialized(true)
       } catch (error: any) {
-        console.error('Permission error:', error)
+        console.error('Error starting scanner:', error)
         if (error.name === 'NotAllowedError') {
-          setPermissionError('Debes permitir el acceso a la cámara para escanear códigos de barras.')
+          setScannerError('Debes permitir el acceso a la cámara para escanear códigos de barras.')
         } else if (error.name === 'NotFoundError') {
-          setPermissionError('No se encontró ninguna cámara en tu dispositivo.')
+          setScannerError('No se encontró ninguna cámara en tu dispositivo.')
         } else {
-          setPermissionError('Error al acceder a la cámara. Verifica los permisos en tu navegador.')
+          setScannerError('Error al iniciar la cámara. Verifica los permisos en tu navegador.')
         }
-        setHasPermission(false)
       }
     }
 
-    checkPermissions()
+    initScanner()
+
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch((err) => console.error('Error stopping scanner:', err))
+      }
+    }
   }, [])
 
-  const { ref } = useZxing({
-    onDecodeResult(result) {
-      handleScan(result)
-    },
-    onError(error) {
-      console.error('Scanner error:', error)
-    },
-    constraints: {
-      video: true,
-      audio: false
-    },
-    timeBetweenDecodingAttempts: 300,
-    paused: !isScanning
-  })
-
-  if (hasPermission === null) {
-    return (
-      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-lg">Solicitando permisos de cámara...</p>
-        </div>
-      </div>
-    )
+  const handleClose = async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop()
+      } catch (err) {
+        console.error('Error stopping scanner:', err)
+      }
+    }
+    onClose()
   }
 
-  if (hasPermission === false) {
+  if (scannerError) {
     return (
       <div className="fixed inset-0 z-50 bg-black">
         <div className="flex flex-col h-full">
           <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-4 py-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Error de Cámara</h2>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 hover:bg-white/20 rounded-full transition-colors"
             >
               <X className="w-6 h-6" />
@@ -170,7 +164,7 @@ export default function BarcodeScannerScreen({
                 No se puede acceder a la cámara
               </h3>
               <p className="text-gray-300 mb-6">
-                {permissionError}
+                {scannerError}
               </p>
               <div className="bg-gray-800 rounded-lg p-4 text-left text-sm text-gray-300 mb-6">
                 <p className="font-semibold mb-2">Para habilitar la cámara:</p>
@@ -182,7 +176,7 @@ export default function BarcodeScannerScreen({
                 </ol>
               </div>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Cerrar
@@ -194,41 +188,32 @@ export default function BarcodeScannerScreen({
     )
   }
 
+  if (!isInitialized) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-lg">Iniciando cámara...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black">
       <div className="flex flex-col h-full">
         <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-4 py-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Escanear Productos</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 hover:bg-white/20 rounded-full transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="flex-1 relative bg-black overflow-hidden">
-          <video
-            ref={ref}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-            style={{ transform: 'scaleX(-1)' }}
-          />
-
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
-
-              {isScanning && (
-                <div className="absolute top-0 left-0 right-0 h-1 bg-blue-500 animate-scan"></div>
-              )}
-            </div>
-          </div>
+        <div className="flex-1 relative bg-black overflow-hidden flex items-center justify-center">
+          <div id={qrCodeRegionId} className="w-full"></div>
         </div>
 
         <div className="bg-gray-900 text-white px-6 py-8 text-center">
@@ -244,20 +229,23 @@ export default function BarcodeScannerScreen({
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes scan {
-          0% {
-            top: 0;
-          }
-          50% {
-            top: 100%;
-          }
-          100% {
-            top: 0;
-          }
+      <style jsx global>{`
+        #${qrCodeRegionId} {
+          display: flex;
+          justify-content: center;
+          align-items: center;
         }
-        .animate-scan {
-          animation: scan 2s ease-in-out infinite;
+        #${qrCodeRegionId} > div {
+          width: 100% !important;
+          border: none !important;
+        }
+        #${qrCodeRegionId} video {
+          width: 100% !important;
+          height: auto !important;
+          object-fit: cover !important;
+        }
+        #qr-shaded-region {
+          border-color: rgba(59, 130, 246, 0.5) !important;
         }
       `}</style>
     </div>
