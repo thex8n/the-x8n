@@ -139,18 +139,25 @@ function TabButton({ item, isActive, isTransitioning }: TabButtonProps) {
             }}
           />
           <div
-            className="absolute -top-5 xs:-top-6 left-1/2 -translate-x-1/2 w-10 h-10 xs:w-11 xs:h-11 rounded-full shadow-xl flex items-center justify-center border-3 xs:border-4 border-white"
+            className="absolute left-1/2 -translate-x-1/2 rounded-full shadow-xl flex items-center justify-center border-white"
             style={{
+              top: 'clamp(-1.25rem, -4vw, -1.5rem)',
+              width: 'clamp(2.5rem, 8vw, 2.75rem)',
+              height: 'clamp(2.5rem, 8vw, 2.75rem)',
+              borderWidth: 'clamp(3px, 1vw, 4px)',
               background: `linear-gradient(to bottom right, ${gradientColors})`,
               boxShadow: `0 20px 25px -5px ${shadowColor}, 0 8px 10px -6px ${shadowColor}`
             }}
           >
-            <Icon className="w-4 h-4 xs:w-5 xs:h-5 text-white" strokeWidth={2.5} />
+            <Icon className="text-white" strokeWidth={2.5} style={{ width: 'clamp(1rem, 3.5vw, 1.25rem)', height: 'clamp(1rem, 3.5vw, 1.25rem)' }} />
           </div>
           {isTransitioning && (
             <div
-              className="absolute -top-5 xs:-top-6 left-1/2 -translate-x-1/2 w-10 h-10 xs:w-11 xs:h-11 rounded-full border-2"
+              className="absolute left-1/2 -translate-x-1/2 rounded-full border-2"
               style={{
+                top: 'clamp(-1.25rem, -4vw, -1.5rem)',
+                width: 'clamp(2.5rem, 8vw, 2.75rem)',
+                height: 'clamp(2.5rem, 8vw, 2.75rem)',
                 animation: 'ping 0.5s cubic-bezier(0, 0, 0.2, 1)',
                 borderColor: borderColor
               }}
@@ -159,8 +166,11 @@ function TabButton({ item, isActive, isTransitioning }: TabButtonProps) {
         </>
       )}
       <div className="relative z-10 flex flex-col items-center gap-0.5 sm:gap-1">
-        {!isActive && <Icon className="w-5 h-5 xs:w-6 xs:h-6 transition-all duration-500 scale-100 opacity-100" strokeWidth={2} />}
-        <span className={`${momoTrust.className} text-[0.65rem] xs:text-xs font-semibold ${isActive ? 'mt-3 xs:mt-4 opacity-100' : 'opacity-80'} leading-tight`}>
+        {!isActive && <Icon className="transition-all duration-500 scale-100 opacity-100" strokeWidth={2} style={{ width: 'clamp(1.25rem, 4vw, 1.5rem)', height: 'clamp(1.25rem, 4vw, 1.5rem)' }} />}
+        <span
+          className={`${momoTrust.className} font-semibold ${isActive ? 'mt-3 xs:mt-4 opacity-100' : 'opacity-80'} leading-tight`}
+          style={{ fontSize: 'clamp(0.6rem, 2.5vw, 0.75rem)' }}
+        >
           {item.name}
         </span>
       </div>

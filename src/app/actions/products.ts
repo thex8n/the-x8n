@@ -256,3 +256,51 @@ export async function incrementProductStock(productId: string) {
   revalidatePath('/inventory')
   return { success: true, data: updatedProduct }
 }
+
+export async function decrementProductStock(productId: string, quantity: number = 1) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: 'No autenticado' }
+  }
+
+  const { data: product, error: fetchError } = await supabase
+    .from('products')
+    .select('stock_quantity, name')
+    .eq('id', productId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (fetchError) {
+    console.error('Error fetching product:', fetchError)
+    return { error: fetchError.message }
+  }
+
+  // Validar que haya stock suficiente
+  if (product.stock_quantity < quantity) {
+    return { error: `Stock insuficiente. Disponible: ${product.stock_quantity}, Solicitado: ${quantity}` }
+  }
+
+  const newStock = product.stock_quantity - quantity
+
+  const { data: updatedProduct, error: updateError } = await supabase
+    .from('products')
+    .update({ stock_quantity: newStock })
+    .eq('id', productId)
+    .select(`
+      *,
+      category:categories(id, name, color, icon)
+    `)
+    .single()
+
+  if (updateError) {
+    console.error('Error updating stock:', updateError)
+    return { error: updateError.message }
+  }
+
+  revalidatePath('/inventory')
+  revalidatePath('/pos')
+  return { success: true, data: updatedProduct }
+}
