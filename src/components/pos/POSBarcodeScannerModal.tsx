@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { X, ShoppingCart, Check, Trash2 } from 'lucide-react'
 import { findProductByBarcode, decrementProductStock } from '@/app/actions/products'
-import { ProductWithCategory } from '@/types/product'
 import { CartItem } from '@/types/cart'
 
 interface POSBarcodeScannerModalProps {
@@ -28,7 +27,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
   const scannerIdRef = useRef('pos-barcode-scanner')
   const SCAN_COOLDOWN_MS = 500
 
-  // Calcular total
   const cartTotal = cart.reduce((total, item) => {
     return total + (item.product.sale_price || 0) * item.quantity
   }, 0)
@@ -116,7 +114,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
       }
 
       if (result.data) {
-        // Agregar al carrito
         const existingItem = cart.find(item => item.product.id === result.data!.id)
 
         if (existingItem) {
@@ -206,8 +203,7 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
   }
 
   return (
-    <div className="fixed inset-0 bg-[linear-gradient(to_bottom_right,#16a34a,#22c55e,#15803d)] overflow-y-auto" style={{ zIndex: 60 }}>
-      {/* Patrón de fondo */}
+    <div className="fixed inset-0 bg-green-600 overflow-y-auto" style={{ zIndex: 60 }}>
       <div className="absolute inset-0 opacity-10">
         <div className="grid grid-cols-8 grid-rows-12 h-full w-full">
           {[...Array(96)].map((_, i) => (
@@ -216,7 +212,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         </div>
       </div>
 
-      {/* Botón cerrar */}
       <button
         onClick={handleClose}
         className="absolute top-6 right-6 p-2 bg-white/90 rounded-full z-10 shadow-lg hover:bg-white transition-all"
@@ -225,7 +220,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         <X className="w-6 h-6 text-gray-800" />
       </button>
 
-      {/* Área de escaneo */}
       <div className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 z-20 cursor-pointer">
         <div className="absolute top-0 left-0 w-12 h-12 border-l-4 border-t-4 border-yellow-400 rounded-tl-2xl"></div>
         <div className="absolute top-0 right-0 w-12 h-12 border-r-4 border-t-4 border-yellow-400 rounded-tr-2xl"></div>
@@ -233,24 +227,20 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         <div className="absolute bottom-0 right-0 w-12 h-12 border-r-4 border-b-4 border-yellow-400 rounded-br-2xl"></div>
       </div>
 
-      {/* Código escaneado */}
       {scannedCode && !notification && (
-        <div className="absolute bottom-[27rem] left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-xl z-20 shadow-2xl">
+        <div className="absolute top-[10%] left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-xl z-20 shadow-2xl">
           <p className="text-lg font-bold">{scannedCode}</p>
         </div>
       )}
 
-      {/* Notificación */}
       {notification && (
-        <div className="absolute bottom-[27rem] left-1/2 transform -translate-x-1/2 bg-white text-green-600 px-6 py-3 rounded-xl z-20 shadow-2xl animate-bounce">
+        <div className="absolute top-[10%] left-1/2 transform -translate-x-1/2 bg-white text-green-600 px-6 py-3 rounded-xl z-20 shadow-2xl">
           <p className="text-lg font-bold">{notification}</p>
         </div>
       )}
 
-      {/* Sección inferior blanca - CARRITO INTEGRADO */}
-      <div className="absolute bottom-0 left-0 right-0 h-[26rem] bg-white rounded-t-3xl z-10 shadow-2xl overflow-hidden">
+      <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl z-10 shadow-2xl overflow-hidden" style={{ height: '26rem' }}>
         <div className="flex flex-col h-full px-6 py-4">
-          {/* Header del carrito */}
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
             <h3 className="font-bold text-gray-900 flex items-center gap-2">
               <ShoppingCart className="w-5 h-5 text-green-600" />
@@ -261,7 +251,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
             </span>
           </div>
 
-          {/* Lista de productos en carrito */}
           <div className="flex-1 overflow-y-auto mb-3">
             {cart.length === 0 ? (
               <div className="text-center py-8">
@@ -299,12 +288,11 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
             )}
           </div>
 
-          {/* Botón finalizar venta */}
           {cart.length > 0 && (
             <button
               onClick={handleCheckout}
               disabled={isCheckingOut}
-              className="w-full bg-gradient-to-r from-blue-600 via-blue-500 to-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {isCheckingOut ? (
                 <>
@@ -322,7 +310,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         </div>
       </div>
 
-      {/* Cámara */}
       {isScannerActive ? (
         <div className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 overflow-hidden rounded-2xl" style={{ zIndex: 15 }}>
           <div id={scannerIdRef.current} className="w-full h-full" />
@@ -333,7 +320,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-2xl z-30 shadow-2xl max-w-sm mx-4">
           <p className="text-red-600 mb-4 text-center font-semibold">{error}</p>

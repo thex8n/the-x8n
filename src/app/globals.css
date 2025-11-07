@@ -5,16 +5,6 @@
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-
-  /* Custom breakpoint for small devices */
-  --breakpoint-xs: 375px;
-}
-
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -28,28 +18,6 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-@keyframes loading-bar {
-  0% {
-    transform: scaleX(0);
-  }
-  50% {
-    transform: scaleX(0.6);
-  }
-  100% {
-    transform: scaleX(1);
-  }
-}
-
-.animate-loading-bar {
-  animation: loading-bar 1.5s ease-in-out infinite;
-}
-
-.scroll-smooth-touch {
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-  overscroll-behavior: contain;
-}
-
 html, body {
   overscroll-behavior: none;
   overflow: hidden;
@@ -59,17 +27,19 @@ html, body {
   overscroll-behavior: contain;
 }
 
+.scroll-smooth-touch {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
 @supports (-webkit-touch-callout: none) {
   .scroll-smooth-touch {
     scroll-snap-type: none;
   }
 }
 
-/* ====================================
-   ESTILOS PARA SCROLLBAR DE CATEGORÍAS
-   ==================================== */
-
-/* Contenedor principal de categorías con scroll */
+/* Estilos para scrollbar de categorías */
 .category-scroll-container {
   max-width: 100%;
   height: 80px;
@@ -80,7 +50,6 @@ html, body {
   scroll-behavior: smooth;
 }
 
-/* Estilos del scrollbar para navegadores Webkit (Chrome, Safari, Edge) */
 .category-scroll-container::-webkit-scrollbar {
   height: 8px;
 }
@@ -100,36 +69,25 @@ html, body {
   background: #555;
 }
 
-/* Estilos para Firefox */
 .category-scroll-container {
   scrollbar-width: thin;
   scrollbar-color: #888 #f1f1f1;
 }
 
-/* ====================================
-   VARIANTES DE ALTURA
-   ==================================== */
-
-/* Altura pequeña - 60px */
+/* Variantes de altura */
 .category-scroll-sm {
   height: 60px;
 }
 
-/* Altura mediana - 80px (por defecto) */
 .category-scroll-md {
   height: 80px;
 }
 
-/* Altura grande - 100px */
 .category-scroll-lg {
   height: 100px;
 }
 
-/* ====================================
-   OCULTAR SCROLLBAR (OPCIONAL)
-   ==================================== */
-
-/* Si quieres ocultar el scrollbar pero mantener la funcionalidad */
+/* Ocultar scrollbar */
 .category-scroll-hidden::-webkit-scrollbar {
   display: none;
 }
@@ -139,10 +97,7 @@ html, body {
   scrollbar-width: none;
 }
 
-/* ====================================
-   SCROLLBAR CON TEMA OSCURO (OPCIONAL)
-   ==================================== */
-
+/* Tema oscuro */
 .category-scroll-dark::-webkit-scrollbar-track {
   background: #2d3748;
 }
@@ -159,11 +114,7 @@ html, body {
   scrollbar-color: #4a5568 #2d3748;
 }
 
-/* ====================================
-   ANIMACIÓN DE FADE EN LOS EXTREMOS
-   ==================================== */
-
-/* Contenedor con gradiente en los extremos para indicar más contenido */
+/* Fade en los extremos */
 .category-scroll-fade {
   position: relative;
 }
@@ -189,10 +140,7 @@ html, body {
   background: linear-gradient(to left, white, transparent);
 }
 
-/* ====================================
-   INDICADORES DE SCROLL (FLECHAS)
-   ==================================== */
-
+/* Indicadores de scroll */
 .category-scroll-indicators {
   position: relative;
 }

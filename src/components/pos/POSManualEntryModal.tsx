@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { X, Search, Plus, Loader2 } from 'lucide-react'
 import { CartItem } from '@/types/cart'
-import { findProductByBarcode } from '@/actions/productActions'
+import { findProductByBarcode } from '@/app/actions/products'
 
 interface POSManualEntryModalProps {
   onClose: () => void
@@ -39,13 +39,13 @@ export default function POSManualEntryModal({
     try {
       const result = await findProductByBarcode(barcode.trim())
 
-      if (!result.success || !result.product) {
+      if (result.error || !result.data) {
         setError('Producto no encontrado')
         setIsLoading(false)
         return
       }
 
-      const product = result.product
+      const product = result.data
 
       // Verificar stock
       if (product.stock_quantity < qty) {
@@ -110,8 +110,17 @@ export default function POSManualEntryModal({
     }
   }
 
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div 
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={handleBackdropClick}
+    >
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

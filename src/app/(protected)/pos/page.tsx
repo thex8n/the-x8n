@@ -4,24 +4,19 @@ import { useState } from 'react'
 import { Scan } from 'lucide-react'
 import POSModeSelectionModal from '@/components/pos/POSModeSelectionModal'
 import POSBarcodeScannerModal from '@/components/pos/POSBarcodeScannerModal'
-// import POSManualEntryModal from '@/components/pos/POSManualEntryModal' // ⚠️ Comentado temporalmente
 import { CartItem } from '@/types/cart'
 
 export default function POSPage() {
   const [showModeSelection, setShowModeSelection] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
-  // const [showManualEntry, setShowManualEntry] = useState(false) // ⚠️ Comentado temporalmente
   const [cart, setCart] = useState<CartItem[]>([])
 
   const handleModeSelect = (mode: 'manual' | 'scanner') => {
     setShowModeSelection(false)
     if (mode === 'scanner') {
       setShowScanner(true)
-    } else {
-      // ⚠️ Temporalmente solo mostramos una alerta
-      alert('Función de Registro Manual próximamente disponible')
-      // setShowManualEntry(true) // Descomentar cuando esté lista la BD
     }
+    // Modo manual sin funcionalidad por ahora
   }
 
   return (
@@ -36,7 +31,7 @@ export default function POSPage() {
         {/* Botón abrir scanner - Solo desktop */}
         <button
           onClick={() => setShowModeSelection(true)}
-          className="hidden md:flex w-full bg-gradient-to-r from-green-600 via-green-500 to-green-700 text-white font-semibold py-6 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all items-center justify-center gap-3"
+          className="hidden md:flex w-full bg-green-600 text-white font-semibold py-6 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all items-center justify-center gap-3"
         >
           <Scan className="w-8 h-8" />
           <span className="text-xl">Abrir Terminal de Ventas</span>
@@ -78,8 +73,7 @@ export default function POSPage() {
       {/* Botón flotante para abrir scanner - Solo móvil */}
       <button
         onClick={() => setShowModeSelection(true)}
-        className="md:hidden fixed bottom-24 right-4 w-16 h-16 bg-black text-white rounded-2xl shadow-2xl hover:shadow-3xl transition-all flex items-center justify-center z-40 active:scale-95"
-        style={{ zIndex: 50 }}
+        className="md:hidden fixed bottom-24 right-4 w-16 h-16 bg-black text-white rounded-2xl shadow-2xl transition-all flex items-center justify-center z-40 active:scale-95"
       >
         <Scan className="w-8 h-8" strokeWidth={2.5} />
       </button>
@@ -100,15 +94,6 @@ export default function POSPage() {
           onUpdateCart={setCart}
         />
       )}
-
-      {/* Modal de Entrada Manual - ⚠️ COMENTADO TEMPORALMENTE */}
-      {/* {showManualEntry && (
-        <POSManualEntryModal
-          onClose={() => setShowManualEntry(false)}
-          cart={cart}
-          onUpdateCart={setCart}
-        />
-      )} */}
     </div>
   )
 }
