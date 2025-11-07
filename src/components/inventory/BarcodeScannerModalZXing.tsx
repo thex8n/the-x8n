@@ -242,7 +242,8 @@ export default function BarcodeScannerModalZXing({ onClose, onProductNotFound, o
   }
 
   const toggleScanner = () => {
-    if (isScannerReady) {
+    // No permitir bloquear si está procesando o mostrando notificación
+    if (isScannerReady && !isProcessing && !notification) {
       setIsScannerActive(!isScannerActive)
     }
   }
