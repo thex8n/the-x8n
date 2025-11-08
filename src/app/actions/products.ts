@@ -264,7 +264,9 @@ export async function scanAndIncrementStock(barcode: string) {
     delete product.category_icon
   }
 
-  revalidatePath('/inventory')
+  // 🔥 NO revalidar en cada escaneo - solo al cerrar el modal
+  // revalidatePath('/inventory')
+  
   return { success: true, data: product }
 }
 
@@ -404,4 +406,12 @@ export async function decrementProductStock(productId: string, quantity: number 
   revalidatePath('/inventory')
   revalidatePath('/pos')
   return { success: true, data: updatedProduct }
+}
+
+/**
+ * Revalidates inventory cache - Call only when closing scanner
+ */
+export async function revalidateInventory() {
+  revalidatePath('/inventory')
+  return { success: true }
 }

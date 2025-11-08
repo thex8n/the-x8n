@@ -2,6 +2,8 @@
 
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+// 🚀 IMPORTAR DIRECTAMENTE - No usar import dinámico
+import { scanAndIncrementStock, revalidateInventory } from '@/app/actions/products'
 
 interface BarcodeScannerModalProps {
   onClose: () => void
@@ -17,6 +19,8 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null)
   const html5QrCodeRef = useRef<any>(null)
   const isProcessingRef = useRef<boolean>(false)
+  const lastScanTimeRef = useRef<number>(0)
+  const scanCountRef = useRef<number>(0)
 
   useEffect(() => {
     let isMounted = true
@@ -61,7 +65,16 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           // Evitar procesar si ya está procesando otro código
           if (isProcessingRef.current) return
           
+          // 🔥 COOLDOWN: Evitar escaneos duplicados muy rápidos
+          const now = Date.now()
+          if (now - lastScanTimeRef.current < 1000) {
+            console.log('Cooldown activo, esperando...')
+            return
+          }
+          lastScanTimeRef.current = now
+          
           isProcessingRef.current = true
+          scanCountRef.current += 1
           setScannedCode(decodedText)
           
           // Vibración si está disponible
@@ -69,17 +82,17 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
             navigator.vibrate(200)
           }
 
-          console.log('Código escaneado:', decodedText)
+          console.log(`Código escaneado #${scanCountRef.current}:`, decodedText)
           
           // Procesar el código escaneado
           await handleBarcodeScanned(decodedText)
           
-          // Esperar 1 segundo antes de permitir otro escaneo
+          // Esperar 800ms antes de permitir otro escaneo
           setTimeout(() => {
             isProcessingRef.current = false
             setScannedCode('')
             setMessage(null)
-          }, 1000)
+          }, 800)
         }
 
         await html5QrCode.start(
@@ -99,6 +112,10 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
 
     return () => {
       isMounted = false
+      isProcessingRef.current = false
+      lastScanTimeRef.current = 0
+      scanCountRef.current = 0
+      
       if (html5QrCodeRef.current) {
         html5QrCodeRef.current.stop().catch((err: any) => {
           console.error('Error deteniendo escáner:', err)
@@ -172,6 +189,11 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   }
 
   const handleClose = () => {
+    // Limpiar todos los refs
+    isProcessingRef.current = false
+    lastScanTimeRef.current = 0
+    scanCountRef.current = 0
+    
     if (html5QrCodeRef.current) {
       html5QrCodeRef.current.stop().then(() => {
         onClose()
