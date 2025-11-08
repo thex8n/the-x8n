@@ -263,8 +263,8 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
       const uniqueNew = new Set<string>()
       
       scanHistory.forEach(item => {
-        if (item.stockBefore === 0 && item.stockAfter === 1) {
-          // Producto nuevo (primera vez escaneado)
+        if (item.stockBefore === 0) {
+          // Producto nuevo (primera vez escaneado/agregado)
           uniqueNew.add(item.id)
         } else {
           // Producto existente
