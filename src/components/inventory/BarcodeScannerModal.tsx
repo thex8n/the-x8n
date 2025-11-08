@@ -9,12 +9,22 @@ interface BarcodeScannerModalProps {
   onStockUpdated?: () => void
 }
 
+interface ScannedProduct {
+  id: string
+  name: string
+  barcode: string
+  timestamp: Date
+  stockBefore: number
+  stockAfter: number
+}
+
 export default function BarcodeScannerModal({ onClose, onProductNotFound, onStockUpdated }: BarcodeScannerModalProps) {
   const scannerRef = useRef<HTMLDivElement>(null)
   const [scannedCode, setScannedCode] = useState<string>('')
   const [isCameraReady, setIsCameraReady] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null)
+  const [scanHistory, setScanHistory] = useState<ScannedProduct[]>([])
   const html5QrCodeRef = useRef<any>(null)
   const isProcessingRef = useRef<boolean>(false)
   const lastScanTimeRef = useRef<number>(0)
@@ -38,23 +48,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           aspectRatio: 1.0,
           disableFlip: false,
           formatsToSupport: [
-            0,  // QR_CODE
-            1,  // AZTEC
-            2,  // CODABAR
-            3,  // CODE_39
-            4,  // CODE_93
-            5,  // CODE_128
-            6,  // DATA_MATRIX
-            7,  // MAXICODE
-            8,  // ITF
-            9,  // EAN_13
-            10, // EAN_8
-            11, // PDF_417
-            12, // RSS_14
-            13, // RSS_EXPANDED
-            14, // UPC_A
-            15, // UPC_E
-            16, // UPC_EAN_EXTENSION
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
           ],
         }
 
@@ -121,10 +115,8 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     setMessage(null)
 
     try {
-      // Importar las funciones de búsqueda e incremento
       const { findProductByBarcode, incrementProductStock } = await import('@/app/actions/products')
 
-      // 1. Buscar producto por código de barras
       const findResult = await findProductByBarcode(barcode)
 
       if (findResult.error) {
@@ -137,7 +129,8 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
       }
 
       if (findResult.data) {
-        // 2. Producto encontrado - incrementar stock
+        const stockBefore = findResult.data.stock_quantity
+        
         const updateResult = await incrementProductStock(findResult.data.id)
 
         if (updateResult.error) {
@@ -149,7 +142,18 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           return
         }
 
-        // ✅ Stock actualizado exitosamente
+        const stockAfter = updateResult.data?.stock_quantity || stockBefore + 1
+
+        // Agregar al historial
+        setScanHistory(prev => [{
+          id: findResult.data.id,
+          name: findResult.data.name,
+          barcode: barcode,
+          timestamp: new Date(),
+          stockBefore: stockBefore,
+          stockAfter: stockAfter
+        }, ...prev])
+
         setMessage({
           type: 'success',
           text: `✓ Stock actualizado: ${updateResult.data?.name || findResult.data.name}`
@@ -163,7 +167,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           onStockUpdated()
         }
       } else {
-        // ⚠ Producto no encontrado
         setMessage({
           type: 'info',
           text: '⚠ Producto no encontrado. Abriendo formulario...'
@@ -191,7 +194,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     lastScanTimeRef.current = 0
     scanCountRef.current = 0
 
-    // Revalidar inventario antes de cerrar
     if (scanCountRef.current > 0) {
       try {
         const { revalidateInventory } = await import('@/app/actions/products')
@@ -256,50 +258,90 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         <div className="absolute bottom-0 right-0 w-10 h-10 sm:w-12 sm:h-12 border-r-3 border-b-3 sm:border-r-4 sm:border-b-4 border-yellow-400 rounded-br-2xl"></div>
       </div>
 
-      {/* Panel inferior blanco - Responsive */}
+      {/* Panel inferior blanco con Historial */}
       <div className="absolute bottom-0 left-0 right-0 h-[55vh] sm:h-96 md:h-96 bg-white rounded-t-3xl z-10 shadow-2xl">
-        <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6 py-4">
-          {isCameraReady && (
-            <>
-              {scannedCode ? (
-                <div className={`border-2 rounded-xl p-4 sm:p-6 w-full max-w-sm mb-4 sm:mb-6 ${
-                  message?.type === 'success' ? 'bg-green-50 border-green-500' :
-                  message?.type === 'error' ? 'bg-red-50 border-red-500' :
-                  message?.type === 'info' ? 'bg-blue-50 border-blue-500' :
-                  'bg-green-50 border-green-500'
-                }`}>
-                  {isProcessing ? (
-                    <div className="text-center">
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 border-3 border-gray-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                      <p className="text-gray-700 text-xs sm:text-sm font-medium">Procesando...</p>
-                    </div>
-                  ) : message ? (
-                    <>
-                      <p className={`text-xs sm:text-xs font-semibold mb-2 text-center ${
-                        message.type === 'success' ? 'text-green-700' :
-                        message.type === 'error' ? 'text-red-700' :
-                        'text-blue-700'
-                      }`}>
-                        {message.text}
-                      </p>
-                      <p className="text-gray-900 text-base sm:text-xl font-bold text-center tracking-wider break-all">
-                        {scannedCode}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-green-700 text-xs font-semibold mb-2 text-center">
-                        ✓ CÓDIGO ESCANEADO
-                      </p>
-                      <p className="text-gray-900 text-lg sm:text-2xl font-bold text-center tracking-wider break-all">
-                        {scannedCode}
-                      </p>
-                    </>
-                  )}
+        <div className="flex flex-col h-full px-4 sm:px-6 py-4">
+          {/* Mensaje de escaneo actual */}
+          {isCameraReady && scannedCode && (
+            <div className={`border-2 rounded-xl p-3 sm:p-4 w-full mb-4 ${
+              message?.type === 'success' ? 'bg-green-50 border-green-500' :
+              message?.type === 'error' ? 'bg-red-50 border-red-500' :
+              message?.type === 'info' ? 'bg-blue-50 border-blue-500' :
+              'bg-green-50 border-green-500'
+            }`}>
+              {isProcessing ? (
+                <div className="text-center">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 border-3 border-gray-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-700 text-xs sm:text-sm font-medium">Procesando...</p>
                 </div>
+              ) : message ? (
+                <>
+                  <p className={`text-xs font-semibold mb-1 text-center ${
+                    message.type === 'success' ? 'text-green-700' :
+                    message.type === 'error' ? 'text-red-700' :
+                    'text-blue-700'
+                  }`}>
+                    {message.text}
+                  </p>
+                  <p className="text-gray-900 text-sm sm:text-base font-bold text-center tracking-wider break-all">
+                    {scannedCode}
+                  </p>
+                </>
               ) : null}
-            </>
+            </div>
           )}
+
+          {/* Historial */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 flex items-center justify-between">
+              Historial
+              {scanHistory.length > 0 && (
+                <span className="text-sm font-normal text-gray-500">
+                  {scanHistory.length} {scanHistory.length === 1 ? 'producto' : 'productos'}
+                </span>
+              )}
+            </h3>
+            
+            {scanHistory.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-gray-400">
+                <div className="text-center">
+                  <svg className="w-16 h-16 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <p className="text-sm">No hay productos escaneados</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                {scanHistory.map((item, index) => (
+                  <div 
+                    key={`${item.id}-${index}`}
+                    className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <h4 className="font-semibold text-gray-900 text-sm">{item.name}</h4>
+                      <span className="text-xs text-gray-500">
+                        {item.timestamp.toLocaleTimeString('es-CO', { 
+                          hour: '2-digit', 
+                          minute: '2-digit',
+                          second: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-2 font-mono">{item.barcode}</p>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-600">Stock:</span>
+                      <span className="font-semibold text-gray-700">{item.stockBefore}</span>
+                      <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                      <span className="font-bold text-green-600">{item.stockAfter}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
