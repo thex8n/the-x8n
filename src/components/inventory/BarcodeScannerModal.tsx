@@ -28,13 +28,14 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null)
   const [scanHistory, setScanHistory] = useState<ScannedProduct[]>(initialHistory)
   const [showConfirmClose, setShowConfirmClose] = useState(false)
-  const [isManuallyLocked, setIsManuallyLocked] = useState(false)
+  const [isManuallyLocked, setIsManuallyLocked] = useState(true) // Iniciar bloqueado por seguridad
+  const [scanSuccess, setScanSuccess] = useState(false) // Para animación de bordes verdes
   const html5QrCodeRef = useRef<any>(null)
   const isProcessingRef = useRef<boolean>(false)
   const lastScanTimeRef = useRef<number>(0)
   const scanCountRef = useRef<number>(0)
   const isPausedRef = useRef<boolean>(isPaused)
-  const isManuallyLockedRef = useRef<boolean>(false)
+  const isManuallyLockedRef = useRef<boolean>(true) // Iniciar bloqueado por seguridad
 
   // Actualizar ref cuando isPaused cambia
   useEffect(() => {
@@ -100,15 +101,21 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           isProcessingRef.current = true
           scanCountRef.current += 1
           setScannedCode(decodedText)
-          
+          setScanSuccess(true) // Activar animación verde
+
           if (navigator.vibrate) {
             navigator.vibrate(50)
           }
 
+          // Desactivar animación verde después de 200ms
+          setTimeout(() => {
+            setScanSuccess(false)
+          }, 200)
+
           console.log(`Código escaneado #${scanCountRef.current}:`, decodedText)
-          
+
           await handleBarcodeScanned(decodedText)
-          
+
           setTimeout(() => {
             isProcessingRef.current = false
             setScannedCode('')
@@ -300,7 +307,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
       className="fixed inset-0 overflow-y-auto" 
       style={{ 
         zIndex: 60,
-        background: 'linear-gradient(to bottom right, rgb(79, 70, 229), rgb(147, 51, 234), rgb(37, 99, 235))'
+        background: 'radial-gradient(ellipse at center, rgb(59, 130, 246), rgb(29, 78, 216), rgb(15, 23, 42), rgb(0, 0, 0))'
       }}
     >
       {/* Patrón de fondo decorativo */}
@@ -353,14 +360,14 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         <div
           id="reader"
           ref={scannerRef}
-          className="w-full h-full rounded-2xl overflow-hidden"
+          className="w-full h-full rounded-3xl overflow-hidden"
         ></div>
 
         {/* Overlay de bloqueo (imagen con fondo negro cuando está bloqueado) */}
         <button
           onClick={toggleLock}
           disabled={isProcessing || isPaused}
-          className={`absolute inset-0 rounded-2xl transition-all flex flex-col items-center justify-center ${
+          className={`absolute inset-0 rounded-3xl transition-all flex flex-col items-center justify-center ${
             isProcessing || isPaused
               ? 'cursor-not-allowed'
               : 'cursor-pointer active:scale-[0.98]'
@@ -383,12 +390,42 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         </button>
       </div>
 
-      {/* Marco del escáner - Esquinas amarillas responsive */}
+      {/* Marco del escáner - Esquinas blancas redondeadas */}
       <div className="absolute top-[20%] sm:top-[25%] md:top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 sm:w-72 sm:h-72 md:w-80 md:h-80 z-30 pointer-events-none">
-        <div className="absolute top-0 left-0 w-10 h-10 sm:w-12 sm:h-12 border-l-3 border-t-3 sm:border-l-4 sm:border-t-4 border-yellow-400 rounded-tl-2xl"></div>
-        <div className="absolute top-0 right-0 w-10 h-10 sm:w-12 sm:h-12 border-r-3 border-t-3 sm:border-r-4 sm:border-t-4 border-yellow-400 rounded-tr-2xl"></div>
-        <div className="absolute bottom-0 left-0 w-10 h-10 sm:w-12 sm:h-12 border-l-3 border-b-3 sm:border-l-4 sm:border-b-4 border-yellow-400 rounded-bl-2xl"></div>
-        <div className="absolute bottom-0 right-0 w-10 h-10 sm:w-12 sm:h-12 border-r-3 border-b-3 sm:border-r-4 sm:border-b-4 border-yellow-400 rounded-br-2xl"></div>
+        {/* Esquina superior izquierda */}
+        <div className="absolute top-0 left-0 w-10 h-10 sm:w-12 sm:h-12 border-l-4 border-t-4 border-white rounded-tl-3xl"></div>
+        {/* Esquina superior derecha */}
+        <div className="absolute top-0 right-0 w-10 h-10 sm:w-12 sm:h-12 border-r-4 border-t-4 border-white rounded-tr-3xl"></div>
+        {/* Esquina inferior izquierda */}
+        <div className="absolute bottom-0 left-0 w-10 h-10 sm:w-12 sm:h-12 border-l-4 border-b-4 border-white rounded-bl-3xl"></div>
+        {/* Esquina inferior derecha */}
+        <div className="absolute bottom-0 right-0 w-10 h-10 sm:w-12 sm:h-12 border-r-4 border-b-4 border-white rounded-br-3xl"></div>
+
+        {/* Bordes negros internos que cambian a verde al escanear */}
+        {/* Borde superior */}
+        <div
+          className={`absolute top-0 left-1/2 transform -translate-x-1/2 w-32 sm:w-40 h-1 transition-colors duration-300 ${
+            scanSuccess ? 'bg-green-500' : 'bg-black'
+          }`}
+        ></div>
+        {/* Borde inferior */}
+        <div
+          className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 w-32 sm:w-40 h-1 transition-colors duration-300 ${
+            scanSuccess ? 'bg-green-500' : 'bg-black'
+          }`}
+        ></div>
+        {/* Borde izquierdo */}
+        <div
+          className={`absolute left-0 top-1/2 transform -translate-y-1/2 h-32 sm:h-40 w-1 transition-colors duration-300 ${
+            scanSuccess ? 'bg-green-500' : 'bg-black'
+          }`}
+        ></div>
+        {/* Borde derecho */}
+        <div
+          className={`absolute right-0 top-1/2 transform -translate-y-1/2 h-32 sm:h-40 w-1 transition-colors duration-300 ${
+            scanSuccess ? 'bg-green-500' : 'bg-black'
+          }`}
+        ></div>
       </div>
 
       {/* Panel inferior blanco con Historial */}
