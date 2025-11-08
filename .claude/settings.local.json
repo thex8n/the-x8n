@@ -12,7 +12,9 @@
       "Bash(del \"c:\\the-x8n\\src\\components\\inventory\\BarcodeScannerScreen.tsx\")",
       "Bash(head:*)",
       "Bash(wc:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(del \"c:\\the-x8n\\src\\components\\inventory\\BarcodeScannerModalZXing.tsx\")",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

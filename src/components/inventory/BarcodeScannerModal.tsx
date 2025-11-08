@@ -1,235 +1,231 @@
 'use client'
 
+import { X, ScanBarcode, Check } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Html5Qrcode } from 'html5-qrcode'
-import { X, AlertCircle } from 'lucide-react'
-import { CiCircleCheck } from 'react-icons/ci'
-import { findProductByBarcode, incrementProductStock } from '@/app/actions/products'
 
 interface BarcodeScannerModalProps {
   onClose: () => void
-  onProductNotFound: (barcode: string) => void
+  onProductNotFound?: (barcode: string) => void
   onStockUpdated?: () => void
 }
 
-type ErrorType = 'camera' | 'network' | 'processing' | 'permission' | null
-
 export default function BarcodeScannerModal({ onClose, onProductNotFound, onStockUpdated }: BarcodeScannerModalProps) {
-  const [error, setError] = useState<string | null>(null)
-  const [errorType, setErrorType] = useState<ErrorType>(null)
-  const [scannedCode, setScannedCode] = useState<string | null>(null)
-  const [isScannerActive, setIsScannerActive] = useState(true)
-  const [notification, setNotification] = useState<string | null>(null)
+  const scannerRef = useRef<HTMLDivElement>(null)
+  const [scannedCode, setScannedCode] = useState<string>('')
+  const [isScanning, setIsScanning] = useState(false)
+  const [isCameraReady, setIsCameraReady] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [isScannerReady, setIsScannerReady] = useState(false)
-  const lastScannedRef = useRef<string | null>(null)
-  const lastScanTimeRef = useRef<number>(0)
-  const scanLockRef = useRef<boolean>(false)
-  const isProcessingRef = useRef<boolean>(false)
-  const html5QrCodeRef = useRef<Html5Qrcode | null>(null)
-  const scannerIdRef = useRef('barcode-scanner')
-  const SCAN_COOLDOWN_MS = 500
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null)
+  const html5QrCodeRef = useRef<any>(null)
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isScanningRef = useRef<boolean>(false)
 
   useEffect(() => {
-    if (isScannerActive) {
-      startScanner()
-    } else {
-      stopScanner()
-    }
-    return () => {
-      stopScanner()
-      lastScannedRef.current = null
-      lastScanTimeRef.current = 0
-      scanLockRef.current = false
-      isProcessingRef.current = false
-    }
-  }, [isScannerActive])
+    let isMounted = true
 
-  const handleError = (message: string, type: ErrorType) => {
-    setError(message)
-    setErrorType(type)
-    setIsProcessing(false)
-    isProcessingRef.current = false
-    scanLockRef.current = false
+    const initScanner = async () => {
+      try {
+        // Importar html5-qrcode dinámicamente
+        const { Html5Qrcode } = await import('html5-qrcode')
+        
+        if (!isMounted || !scannerRef.current) return
 
-    if (navigator.vibrate) {
-      navigator.vibrate([200, 100, 200])
-    }
-  }
+        const html5QrCode = new Html5Qrcode('reader')
+        html5QrCodeRef.current = html5QrCode
 
-  const clearError = () => {
-    setError(null)
-    setErrorType(null)
-  }
-
-  const startScanner = async () => {
-    try {
-      clearError()
-      setIsScannerReady(false)
-
-      // Detener y limpiar el escáner anterior si existe
-      if (html5QrCodeRef.current) {
-        try {
-          await html5QrCodeRef.current.stop()
-          html5QrCodeRef.current.clear()
-        } catch (err) {
-          console.log('Limpiando escáner anterior:', err)
-        }
-        html5QrCodeRef.current = null
-      }
-
-      const html5QrCode = new Html5Qrcode(scannerIdRef.current)
-      html5QrCodeRef.current = html5QrCode
-
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
+        const config = {
+          fps: 30,
+          qrbox: { width: 280, height: 280 },
           aspectRatio: 1.0,
           disableFlip: false,
-        },
-        (decodedText) => {
-          const now = Date.now()
-          const timeSinceLastScan = now - lastScanTimeRef.current
+          formatsToSupport: [
+            0,  // QR_CODE
+            1,  // AZTEC
+            2,  // CODABAR
+            3,  // CODE_39
+            4,  // CODE_93
+            5,  // CODE_128
+            6,  // DATA_MATRIX
+            7,  // MAXICODE
+            8,  // ITF
+            9,  // EAN_13
+            10, // EAN_8
+            11, // PDF_417
+            12, // RSS_14
+            13, // RSS_EXPANDED
+            14, // UPC_A
+            15, // UPC_E
+            16, // UPC_EAN_EXTENSION
+          ],
+        }
 
-          if (
-            !scanLockRef.current &&
-            !isProcessingRef.current &&
-            timeSinceLastScan >= SCAN_COOLDOWN_MS &&
-            decodedText !== lastScannedRef.current
-          ) {
-            scanLockRef.current = true
-            isProcessingRef.current = true
-            lastScanTimeRef.current = now
-            handleBarcodeScanned(decodedText)
+        const qrCodeSuccessCallback = async (decodedText: string) => {
+          // Usar ref en lugar de state para tener el valor actualizado
+          if (!isScanningRef.current) return
+          
+          // Cancelar el timeout de 2 segundos ya que se escaneó un código
+          if (scanTimeoutRef.current) {
+            clearTimeout(scanTimeoutRef.current)
+            scanTimeoutRef.current = null
           }
-        },
-        () => {}
-      )
+          
+          setScannedCode(decodedText)
+          setIsScanning(false)
+          isScanningRef.current = false
+          
+          // Vibración si está disponible
+          if (navigator.vibrate) {
+            navigator.vibrate(200)
+          }
 
-      setIsScannerReady(true)
-    } catch (err: any) {
-      console.error('Error al iniciar escáner:', err)
-      setIsScannerReady(false)
+          console.log('Código escaneado:', decodedText)
+          
+          // Procesar el código escaneado
+          await handleBarcodeScanned(decodedText)
+        }
 
-      const errorMessage = err?.message || ''
-      if (errorMessage.includes('Permission') || errorMessage.includes('NotAllowedError')) {
-        handleError('Se necesitan permisos de cámara para escanear códigos', 'permission')
-      } else if (errorMessage.includes('NotFoundError') || errorMessage.includes('NotReadableError')) {
-        handleError('No se encontró ninguna cámara disponible', 'camera')
-      } else {
-        handleError('No se pudo iniciar la cámara. Intenta recargar la página.', 'camera')
-      }
-    }
-  }
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          config,
+          qrCodeSuccessCallback,
+          undefined
+        )
 
-  const stopScanner = async () => {
-    if (html5QrCodeRef.current) {
-      try {
-        await html5QrCodeRef.current.stop()
-        html5QrCodeRef.current.clear()
-        html5QrCodeRef.current = null
+        setIsCameraReady(true)
       } catch (err) {
-        console.error('Error al detener escáner:', err)
-        // Forzar limpieza incluso si hay error
-        html5QrCodeRef.current = null
+        console.error('Error iniciando escáner:', err)
       }
     }
-  }
+
+    initScanner()
+
+    return () => {
+      isMounted = false
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current)
+      }
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current.stop().catch((err: any) => {
+          console.error('Error deteniendo escáner:', err)
+        })
+      }
+    }
+  }, [])
 
   const handleBarcodeScanned = async (barcode: string) => {
-    setIsScannerActive(false)
     setIsProcessing(true)
-    setScannedCode(barcode)
-    lastScannedRef.current = barcode
-
-    if (navigator.vibrate) navigator.vibrate(50)
+    setMessage(null)
 
     try {
+      // Importar las funciones necesarias
+      const { findProductByBarcode, incrementProductStock } = await import('@/app/actions/products')
+      
+      // Buscar el producto por código de barras
       const result = await findProductByBarcode(barcode)
-
-      if (result.error) {
-        handleError(
-          'No se pudo buscar el producto. Verifica tu conexión e intenta nuevamente.',
-          'network'
-        )
-        setIsScannerActive(true)
-        return
+      
+      if ('error' in result) {
+        throw new Error(result.error)
       }
 
       if (result.data) {
-        const incrementResult = await incrementProductStock(result.data.id)
+        // Producto encontrado - Incrementar stock
+        const product = result.data
+        const incrementResult = await incrementProductStock(product.id)
 
-        if (incrementResult.error) {
-          handleError(
-            `No se pudo actualizar el stock de "${result.data.name}". Intenta nuevamente.`,
-            'processing'
-          )
-          setIsScannerActive(true)
-        } else {
-          setNotification(`+1 ${result.data.name}`)
-
-          if (navigator.vibrate) navigator.vibrate([100, 50, 100])
-
-          if (onStockUpdated) {
-            onStockUpdated()
-          }
-
-          setTimeout(() => {
-            setNotification(null)
-            setScannedCode(null)
-            lastScannedRef.current = null
-            scanLockRef.current = false
-            isProcessingRef.current = false
-            setIsScannerActive(true)
-          }, 1000)
+        if ('error' in incrementResult) {
+          throw new Error(incrementResult.error)
         }
-      } else {
-        isProcessingRef.current = false
-        scanLockRef.current = false
-        lastScannedRef.current = null
 
-        await stopScanner()
+        const updatedProduct = incrementResult.data
+        
+        setMessage({
+          type: 'success',
+          text: `✓ Stock actualizado: ${product.name} (${product.stock_quantity} → ${updatedProduct.stock_quantity})`
+        })
+        
+        // Vibración de éxito
+        if (navigator.vibrate) {
+          navigator.vibrate([100, 50, 100])
+        }
+
+        // Notificar que el stock fue actualizado
+        if (onStockUpdated) {
+          onStockUpdated()
+        }
+
+        // Limpiar después de 3 segundos
+        setTimeout(() => {
+          setScannedCode('')
+          setMessage(null)
+        }, 3000)
+      } else {
+        // Producto no encontrado - Abrir formulario
+        setMessage({
+          type: 'info',
+          text: '⚠ Producto no encontrado. Abriendo formulario...'
+        })
 
         setTimeout(() => {
-          onProductNotFound(barcode)
-        }, 100)
+          if (onProductNotFound) {
+            onProductNotFound(barcode)
+          }
+        }, 1500)
       }
-    } catch (err: any) {
-      console.error('Error al procesar código:', err)
+    } catch (error) {
+      console.error('Error procesando código:', error)
+      setMessage({
+        type: 'error',
+        text: '✗ Error al procesar el código. Intenta nuevamente.'
+      })
 
-      const isNetworkError = err?.message?.includes('fetch') ||
-                           err?.message?.includes('network') ||
-                           !navigator.onLine
-
-      handleError(
-        isNetworkError
-          ? 'Sin conexión a internet. Verifica tu red e intenta nuevamente.'
-          : 'Error inesperado al procesar el código. Intenta nuevamente.',
-        isNetworkError ? 'network' : 'processing'
-      )
-      setIsScannerActive(true)
+      setTimeout(() => {
+        setScannedCode('')
+        setMessage(null)
+      }, 3000)
+    } finally {
+      setIsProcessing(false)
     }
-
-    setIsProcessing(false)
   }
 
-  const handleClose = async () => {
-    await stopScanner()
-    onClose()
+  const handleClose = () => {
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current)
+    }
+    if (html5QrCodeRef.current) {
+      html5QrCodeRef.current.stop().then(() => {
+        onClose()
+      }).catch((err: any) => {
+        console.error('Error al cerrar:', err)
+        onClose()
+      })
+    } else {
+      onClose()
+    }
   }
 
-  const toggleScanner = () => {
-    // Solo permitir pausar cuando está activamente escaneando
-    // No permitir si está procesando, mostrando notificación, o ya está pausado
-    if (isScannerReady && isScannerActive && !isProcessing && !notification) {
-      setIsScannerActive(false)
-    }
+  const handleScan = () => {
+    setIsScanning(true)
+    isScanningRef.current = true
+    setScannedCode('')
+    setMessage(null)
+    
+    // Timeout de 2 segundos: si no se escanea nada, apagar el escaneo
+    scanTimeoutRef.current = setTimeout(() => {
+      setIsScanning(false)
+      isScanningRef.current = false
+      scanTimeoutRef.current = null
+    }, 2000) // 2 segundos
   }
 
   return (
-    <div className="fixed inset-0 bg-[linear-gradient(to_bottom_right,#4f46e5,#9333ea,#2563eb)] overflow-y-auto" style={{ zIndex: 60 }}>
+    <div 
+      className="fixed inset-0 overflow-y-auto" 
+      style={{ 
+        zIndex: 60,
+        background: 'linear-gradient(to bottom right, rgb(79, 70, 229), rgb(147, 51, 234), rgb(37, 99, 235))'
+      }}
+    >
+      {/* Patrón de fondo decorativo */}
       <div className="absolute inset-0 opacity-10">
         <div className="grid grid-cols-8 grid-rows-12 h-full w-full">
           {[...Array(96)].map((_, i) => (
@@ -238,6 +234,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         </div>
       </div>
 
+      {/* Botón cerrar */}
       <button
         onClick={handleClose}
         className="absolute top-6 right-6 p-2 bg-white/90 rounded-full z-10 shadow-lg hover:bg-white transition-all"
@@ -246,214 +243,111 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         <X className="w-6 h-6 text-gray-800" />
       </button>
 
-      <div
-        onClick={toggleScanner}
-        className={`absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 ${isScannerActive && isScannerReady && !isProcessing && !notification ? 'z-20 cursor-pointer' : 'z-10 pointer-events-none'}`}
-      >
+      {/* Área del escáner */}
+      <div className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 z-20">
+        <div 
+          id="reader" 
+          ref={scannerRef}
+          className="w-full h-full rounded-2xl overflow-hidden"
+        ></div>
+      </div>
+
+      {/* Marco del escáner - Esquinas amarillas */}
+      <div className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 z-30 pointer-events-none">
         <div className="absolute top-0 left-0 w-12 h-12 border-l-4 border-t-4 border-yellow-400 rounded-tl-2xl"></div>
         <div className="absolute top-0 right-0 w-12 h-12 border-r-4 border-t-4 border-yellow-400 rounded-tr-2xl"></div>
         <div className="absolute bottom-0 left-0 w-12 h-12 border-l-4 border-b-4 border-yellow-400 rounded-bl-2xl"></div>
         <div className="absolute bottom-0 right-0 w-12 h-12 border-r-4 border-b-4 border-yellow-400 rounded-br-2xl"></div>
       </div>
 
-      {scannedCode && !notification && (
-        <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-6 py-3 rounded-xl z-20 shadow-2xl">
-          <p className="text-lg font-bold">{scannedCode}</p>
+      {/* Indicador de escaneo activo */}
+      {isScanning && (
+        <div className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 z-25 pointer-events-none">
+          <div className="absolute inset-0 border-4 border-green-400 rounded-2xl animate-pulse"></div>
         </div>
       )}
 
+      {/* Panel inferior blanco */}
       <div className="absolute bottom-0 left-0 right-0 h-96 bg-white rounded-t-3xl z-10 shadow-2xl">
         <div className="flex flex-col items-center justify-center h-full px-6">
-          {isProcessing ? (
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-gray-600 text-center text-sm">Procesando...</p>
-            </div>
-          ) : notification ? (
-            <div className="text-center animate-in fade-in duration-300">
-              <p className="text-gray-800 font-bold text-2xl mb-2">{notification}</p>
-              <p className="text-green-600 font-semibold text-lg mb-1">Stock actualizado</p>
-              <p className="text-gray-500 text-sm">Reactivando escáner...</p>
+          {!isCameraReady ? (
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600 text-sm">Iniciando cámara...</p>
             </div>
           ) : (
-            <div className="text-center">
-              <p className="text-gray-600 text-center text-sm mb-2">
-                Coloca el código de barras dentro del marco
+            <>
+              {/* Código escaneado o mensaje */}
+              {scannedCode ? (
+                <div className={`border-2 rounded-xl p-6 w-full max-w-sm mb-6 ${
+                  message?.type === 'success' ? 'bg-green-50 border-green-500' :
+                  message?.type === 'error' ? 'bg-red-50 border-red-500' :
+                  message?.type === 'info' ? 'bg-blue-50 border-blue-500' :
+                  'bg-green-50 border-green-500'
+                }`}>
+                  {isProcessing ? (
+                    <div className="text-center">
+                      <div className="w-8 h-8 border-3 border-gray-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-gray-700 text-sm font-medium">Procesando...</p>
+                    </div>
+                  ) : message ? (
+                    <>
+                      <p className={`text-xs font-semibold mb-2 text-center ${
+                        message.type === 'success' ? 'text-green-700' :
+                        message.type === 'error' ? 'text-red-700' :
+                        'text-blue-700'
+                      }`}>
+                        {message.text}
+                      </p>
+                      <p className="text-gray-900 text-xl font-bold text-center tracking-wider break-all">
+                        {scannedCode}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-green-700 text-xs font-semibold mb-2 text-center">
+                        ✓ CÓDIGO ESCANEADO
+                      </p>
+                      <p className="text-gray-900 text-2xl font-bold text-center tracking-wider break-all">
+                        {scannedCode}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6 w-full max-w-sm mb-6">
+                  <p className="text-gray-400 text-center text-sm">
+                    {isScanning ? 'Escaneando...' : 'Presiona el botón para escanear'}
+                  </p>
+                </div>
+              )}
+
+              <p className="text-gray-400 text-xs mt-6">
+                {scannedCode ? 'Toca el botón para escanear otro código' : 'FPS: 30 | Alta Precisión | Todos los formatos'}
               </p>
-              <p className="text-gray-400 text-xs">
-                FPS: 10 | Precisión Optimizada
-              </p>
-            </div>
+            </>
           )}
         </div>
       </div>
 
-      {isProcessing || notification ? (
-        <div className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-black/50 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center gap-4 p-4" style={{ zIndex: 15 }}>
-          {notification ? (
-            <>
-              <div className="animate-in zoom-in duration-300">
-                <CiCircleCheck className="w-16 h-16 text-green-400 animate-pulse" strokeWidth={1} />
-              </div>
-              <span className="text-white text-lg font-semibold tracking-wide animate-in fade-in duration-500">¡Agregado!</span>
-            </>
-          ) : (
-            <>
-              <div className="w-16 h-16 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-white text-lg font-semibold tracking-wide">Verificando...</span>
-            </>
-          )}
-        </div>
-      ) : isScannerActive ? (
-        <div className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 overflow-hidden rounded-2xl scanner-container" style={{ zIndex: 15 }}>
-          <div id={scannerIdRef.current} className="w-full h-full" />
-        </div>
-      ) : isScannerReady ? (
-        <div
-          onClick={() => setIsScannerActive(true)}
-          className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-black/50 backdrop-blur-sm rounded-2xl flex items-center justify-center p-4 cursor-pointer hover:bg-black/60 transition-all"
-          style={{ zIndex: 15 }}
+      {/* Botón de escaneo flotante - Misma posición que en page.tsx */}
+      {isCameraReady && (
+        <button
+          onClick={handleScan}
+          disabled={isScanning || isProcessing}
+          className={`fixed w-16 h-16 rounded-2xl shadow-2xl transition-all flex items-center justify-center z-40 active:scale-95 ${
+            isScanning || isProcessing
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-black text-white hover:bg-gray-900'
+          }`}
+          style={{ 
+            bottom: '6rem',
+            right: '1.5rem'
+          }}
+          aria-label={scannedCode ? 'Escanear nuevo código' : 'Escanear código'}
         >
-          <div className="relative flex items-center justify-center">
-            <img
-              src="/imagen/scanner.png"
-              alt="QR Scanner"
-              className="w-56 h-56 object-contain opacity-20"
-            />
-            <span className="absolute text-white text-xl font-bold tracking-wider">TAP TO SCAN</span>
-          </div>
-        </div>
-      ) : (
-        <div className="absolute top-[28%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-black/50 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center gap-4 p-4" style={{ zIndex: 15 }}>
-          <div className="w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-white text-sm font-medium tracking-wide">Iniciando cámara...</span>
-        </div>
-      )}
-
-      <style jsx global>{`
-        .scanner-container video {
-          border: none !important;
-          outline: none !important;
-        }
-
-        .scanner-container #qr-shaded-region {
-          border: none !important;
-        }
-
-        #${scannerIdRef.current} {
-          border: none !important;
-        }
-
-        #${scannerIdRef.current} video {
-          border: none !important;
-          outline: none !important;
-          box-shadow: none !important;
-        }
-
-        #${scannerIdRef.current} canvas {
-          display: none !important;
-        }
-      `}</style>
-
-      {error && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-30">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className={`p-6 ${
-              errorType === 'camera' ? 'bg-orange-50' :
-              errorType === 'permission' ? 'bg-yellow-50' :
-              errorType === 'network' ? 'bg-blue-50' :
-              'bg-red-50'
-            }`}>
-              <div className="flex items-center justify-center mb-3">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                  errorType === 'camera' ? 'bg-orange-100' :
-                  errorType === 'permission' ? 'bg-yellow-100' :
-                  errorType === 'network' ? 'bg-blue-100' :
-                  'bg-red-100'
-                }`}>
-                  {errorType === 'camera' ? (
-                    <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  ) : errorType === 'permission' ? (
-                    <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  ) : errorType === 'network' ? (
-                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-                    </svg>
-                  ) : (
-                    <AlertCircle className="w-8 h-8 text-red-600" />
-                  )}
-                </div>
-              </div>
-              <h3 className={`text-xl font-bold text-center mb-2 ${
-                errorType === 'camera' ? 'text-orange-900' :
-                errorType === 'permission' ? 'text-yellow-900' :
-                errorType === 'network' ? 'text-blue-900' :
-                'text-red-900'
-              }`}>
-                {errorType === 'camera' ? 'Error de Cámara' :
-                 errorType === 'permission' ? 'Permisos Requeridos' :
-                 errorType === 'network' ? 'Sin Conexión' :
-                 'Error al Procesar'}
-              </h3>
-            </div>
-
-            <div className="p-6">
-              <p className="text-gray-700 text-center mb-6 leading-relaxed">
-                {error}
-              </p>
-
-              <div className="flex flex-col gap-3">
-                <button
-                  onClick={() => {
-                    clearError()
-                    setIsProcessing(false)
-                    lastScannedRef.current = null
-                    scanLockRef.current = false
-                    isProcessingRef.current = false
-                    setIsScannerActive(true)
-                  }}
-                  className={`w-full px-4 py-3 text-white rounded-xl font-semibold transition-all active:scale-95 ${
-                    errorType === 'camera' ? 'bg-orange-600 hover:bg-orange-700' :
-                    errorType === 'permission' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                    errorType === 'network' ? 'bg-blue-600 hover:bg-blue-700' :
-                    'bg-red-600 hover:bg-red-700'
-                  }`}
-                >
-                  {errorType === 'permission' ? 'Conceder Permisos' : 'Reintentar'}
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (navigator.vibrate) navigator.vibrate(50)
-                    handleClose()
-                  }}
-                  className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all active:scale-95"
-                >
-                  Cerrar Escáner
-                </button>
-              </div>
-
-              {errorType === 'permission' && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-xs text-yellow-800 text-center">
-                    💡 Ve a la configuración de tu navegador y permite el acceso a la cámara
-                  </p>
-                </div>
-              )}
-              {errorType === 'network' && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs text-blue-800 text-center">
-                    💡 Verifica tu conexión WiFi o datos móviles
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+          <ScanBarcode className="w-8 h-8 text-white" strokeWidth={2.5} />
+        </button>
       )}
     </div>
   )
