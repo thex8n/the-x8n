@@ -11,7 +11,8 @@
       "Bash(npm uninstall:*)",
       "Bash(del \"c:\\the-x8n\\src\\components\\inventory\\BarcodeScannerScreen.tsx\")",
       "Bash(head:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []
