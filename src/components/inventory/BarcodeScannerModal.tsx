@@ -8,6 +8,7 @@ interface BarcodeScannerModalProps {
   onProductNotFound?: (barcode: string) => void
   onStockUpdated?: () => void
   initialHistory?: ScannedProduct[]
+  isPaused?: boolean
 }
 
 interface ScannedProduct {
@@ -19,7 +20,7 @@ interface ScannedProduct {
   stockAfter: number
 }
 
-export default function BarcodeScannerModal({ onClose, onProductNotFound, onStockUpdated, initialHistory = [] }: BarcodeScannerModalProps) {
+export default function BarcodeScannerModal({ onClose, onProductNotFound, onStockUpdated, initialHistory = [], isPaused = false }: BarcodeScannerModalProps) {
   const scannerRef = useRef<HTMLDivElement>(null)
   const [scannedCode, setScannedCode] = useState<string>('')
   const [isCameraReady, setIsCameraReady] = useState(false)
@@ -31,6 +32,12 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   const isProcessingRef = useRef<boolean>(false)
   const lastScanTimeRef = useRef<number>(0)
   const scanCountRef = useRef<number>(0)
+  const isPausedRef = useRef<boolean>(isPaused)
+
+  // Actualizar ref cuando isPaused cambia
+  useEffect(() => {
+    isPausedRef.current = isPaused
+  }, [isPaused])
 
   // Sincronizar con initialHistory cuando cambie (por ejemplo, cuando se agrega un producto)
   useEffect(() => {
@@ -62,8 +69,14 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         }
 
         const qrCodeSuccessCallback = async (decodedText: string) => {
+          // Si el escáner está pausado (formulario abierto), ignorar escaneos
+          if (isPausedRef.current) {
+            console.log('Escáner pausado, ignorando escaneo...')
+            return
+          }
+
           if (isProcessingRef.current) return
-          
+
           const now = Date.now()
           if (now - lastScanTimeRef.current < 1000) {
             console.log('Cooldown activo, esperando...')
@@ -123,10 +136,13 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     setIsProcessing(true)
     setMessage(null)
 
+    // Limpiar espacios en blanco del código de barras
+    const cleanBarcode = barcode.trim()
+
     try {
       const { findProductByBarcode, incrementProductStock, saveInventoryHistory } = await import('@/app/actions/products')
 
-      const findResult = await findProductByBarcode(barcode)
+      const findResult = await findProductByBarcode(cleanBarcode)
 
       if (findResult.error) {
         console.error('❌ Error buscando producto:', findResult.error)
@@ -157,7 +173,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         await saveInventoryHistory(
           findResult.data.id,
           findResult.data.name,
-          barcode,
+          cleanBarcode,
           stockBefore,
           stockAfter
         )
@@ -167,7 +183,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           const newHistory = [{
             id: findResult.data.id,
             name: findResult.data.name,
-            barcode: barcode,
+            barcode: cleanBarcode,
             timestamp: new Date(),
             stockBefore: stockBefore,
             stockAfter: stockAfter
@@ -199,7 +215,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
 
         setTimeout(() => {
           if (onProductNotFound) {
-            onProductNotFound(barcode)
+            onProductNotFound(cleanBarcode)
           }
         }, 800)
       }

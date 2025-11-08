@@ -305,6 +305,7 @@ export default function InventoryPage() {
             onProductNotFound={handleProductNotFound}
             onStockUpdated={loadProducts}
             initialHistory={scannerHistory}
+            isPaused={showAddProductForm}
           />
         )}
 
