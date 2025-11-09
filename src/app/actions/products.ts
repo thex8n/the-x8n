@@ -111,6 +111,7 @@ export async function updateProduct(productId: string, data: ProductFormData) {
       active: data.active,
     })
     .eq('id', productId)
+    .eq('user_id', user.id)  // SECURITY: Only update own products
     .select()
     .single()
 
@@ -144,6 +145,7 @@ export async function deleteProduct(productId: string) {
     .from('products')
     .delete()
     .eq('id', productId)
+    .eq('user_id', user.id)  // SECURITY: Only delete own products
 
   if (error) {
     console.error('Error deleting product:', error)
@@ -400,6 +402,7 @@ export async function decrementProductStock(productId: string, quantity: number 
     .from('products')
     .update({ stock_quantity: newStock })
     .eq('id', productId)
+    .eq('user_id', user.id)  // SECURITY: Only update own products
     .select(`
       *,
       category:categories(id, name, color, icon)
@@ -429,72 +432,10 @@ export async function revalidateInventory() {
 // ========================================
 
 /**
- * Saves a scan to inventory history
- * @param productId - ID of the scanned product
- * @param productName - Name of the scanned product
- * @param barcode - Scanned barcode
- * @param stockBefore - Stock quantity before increment
- * @param stockAfter - Stock quantity after increment
- * @returns Success or error message
+ * DEPRECATED: Inventory history functions migrated to Cloudflare D1
+ * See src/app/actions/inventory-history-d1.ts for new implementation
+ *
+ * Old Supabase functions removed:
+ * - saveInventoryHistory() → Use saveInventoryHistoryD1()
+ * - getInventoryHistory() → Use getInventoryHistoryD1()
  */
-export async function saveInventoryHistory(
-  productId: string,
-  productName: string,
-  barcode: string,
-  stockBefore: number,
-  stockAfter: number
-) {
-  const user = await requireAuth()
-
-  if (!user) {
-    return { error: AUTH_MESSAGES.NOT_AUTHENTICATED }
-  }
-
-  const supabase = await createClient()
-
-  const { error } = await supabase
-    .from('inventory_history')
-    .insert({
-      user_id: user.id,
-      product_id: productId,
-      product_name: productName,
-      barcode: barcode,
-      stock_before: stockBefore,
-      stock_after: stockAfter,
-    })
-
-  if (error) {
-    console.error('Error saving inventory history:', error)
-    return { error: error.message }
-  }
-
-  revalidatePath('/inventory_history')
-  return { success: true }
-}
-
-/**
- * Retrieves inventory history for the authenticated user
- * @returns Success with history array or error message
- */
-export async function getInventoryHistory() {
-  const user = await requireAuth()
-
-  if (!user) {
-    return { error: AUTH_MESSAGES.NOT_AUTHENTICATED }
-  }
-
-  const supabase = await createClient()
-
-  const { data: history, error } = await supabase
-    .from('inventory_history')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('scanned_at', { ascending: false })
-
-  if (error) {
-    console.error('Error fetching inventory history:', error)
-    return { error: error.message }
-  }
-
-  return { success: true, data: history }
-}

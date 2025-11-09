@@ -1,14 +1,7 @@
-import { getInventoryHistory } from '@/app/actions/products'
-import { redirect } from 'next/navigation'
+import { getInventoryHistoryD1 } from '@/app/actions/inventory-history-d1'
 
 export default async function InventoryHistoryPage() {
-  const result = await getInventoryHistory()
-
-  if (result.error) {
-    redirect('/login')
-  }
-
-  const history = result.data || []
+  const history = await getInventoryHistoryD1()
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -82,11 +75,11 @@ export default async function InventoryHistoryPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {item.product?.name || 'Producto eliminado'}
+                        {item.product_name}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
-                      {item.product?.code || '-'}
+                      {item.product_id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
                       {item.barcode}

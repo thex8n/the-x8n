@@ -1,0 +1,14 @@
+name = "the-x8n"
+compatibility_date = "2025-01-09"
+
+# D1 Database for Inventory History
+[[d1_databases]]
+binding = "DB"
+database_name = "the-x8n-inventory"
+database_id = "" # Se llenará después de crear la base de datos con: npx wrangler d1 create the-x8n-inventory
+
+# Environment variables for development
+# Add these to your .env.local file:
+# CLOUDFLARE_ACCOUNT_ID="your-account-id"
+# CLOUDFLARE_DATABASE_ID="your-database-id"
+# CLOUDFLARE_D1_TOKEN="your-api-token"

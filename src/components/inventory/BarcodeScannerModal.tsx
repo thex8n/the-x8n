@@ -185,7 +185,8 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     const cleanBarcode = barcode.trim()
 
     try {
-      const { findProductByBarcode, incrementProductStock, saveInventoryHistory } = await import('@/app/actions/products')
+      const { findProductByBarcode, incrementProductStock } = await import('@/app/actions/products')
+      const { saveInventoryHistoryD1 } = await import('@/app/actions/inventory-history-d1')
 
       const findResult = await findProductByBarcode(cleanBarcode)
 
@@ -214,7 +215,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
 
         const stockAfter = updateResult.data?.stock_quantity || stockBefore + 1
 
-        await saveInventoryHistory(
+        await saveInventoryHistoryD1(
           findResult.data.id,
           findResult.data.name,
           cleanBarcode,
