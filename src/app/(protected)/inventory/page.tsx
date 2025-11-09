@@ -274,7 +274,12 @@ export default function InventoryPage() {
         {loading ? (
           <div className="flex items-center justify-center min-h-[calc(100vh-20rem)] md:min-h-[400px]">
             <div className="relative w-24 h-24">
-              <div className="absolute inset-0 rounded-full bg-linear-to-r from-blue-500 via-blue-400 to-transparent animate-spin"></div>
+              <div
+                className="absolute inset-0 rounded-full animate-slow-spin"
+                style={{
+                  background: 'conic-gradient(from 0deg, transparent 0deg, transparent 30deg, rgba(147, 197, 253, 0.3) 90deg, #93c5fd 180deg, #60a5fa 270deg, #3b82f6 360deg)'
+                }}
+              ></div>
               <div className="absolute inset-3 rounded-full bg-gray-50"></div>
             </div>
           </div>

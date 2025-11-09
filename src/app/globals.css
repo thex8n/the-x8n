@@ -205,3 +205,17 @@ html, body {
   stroke-dasharray: 400;
   animation: infinityFlow 2s ease-in-out infinite;
 }
+
+/* Animación lenta para spinner circular */
+@keyframes slowSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-slow-spin {
+  animation: slowSpin 2s linear infinite;
+}
