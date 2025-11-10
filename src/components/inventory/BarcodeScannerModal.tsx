@@ -2,6 +2,7 @@
 
 import { X, ScrollText, ClipboardClock } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { ImagePlus } from 'lucide-react'
 
 interface BarcodeScannerModalProps {
   onClose: () => void
@@ -18,6 +19,7 @@ interface ScannedProduct {
   timestamp: Date
   stockBefore: number
   stockAfter: number
+  imageUrl?: string | null  // ← NUEVO: URL de la imagen del producto
 }
 
 export default function BarcodeScannerModal({ onClose, onProductNotFound, onStockUpdated, initialHistory = [], isPaused = false }: BarcodeScannerModalProps) {
@@ -38,7 +40,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   const scanCountRef = useRef<number>(0)
   const isPausedRef = useRef<boolean>(isPaused)
   const isManuallyLockedRef = useRef<boolean>(true)
-  const isClosingRef = useRef<boolean>(false) // ✅ Nuevo ref para controlar si está cerrando
+  const isClosingRef = useRef<boolean>(false)
 
   useEffect(() => {
     isPausedRef.current = isPaused
@@ -54,7 +56,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     }
   }, [initialHistory])
 
-  // ✅ Confirmación al recargar/cerrar página
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (scanHistory.length > 0) {
@@ -75,7 +76,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('keydown', handleKeyDown)
-      // ✅ SOLO limpiar localStorage si realmente está cerrando el modal
       if (isClosingRef.current && scanHistory.length > 0) {
         localStorage.removeItem('scanner_history')
       }
@@ -174,7 +174,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           console.error('Error deteniendo escáner:', err)
         })
       }
-      // ✅ NO limpiar localStorage aquí, solo detener la cámara
     }
   }, [])
 
@@ -215,12 +214,14 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
 
         const stockAfter = updateResult.data?.stock_quantity || stockBefore + 1
 
+        // ✨ NUEVO: Pasar image_url al guardar en historial
         await saveInventoryHistoryD1(
           findResult.data.id,
           findResult.data.name,
           cleanBarcode,
           stockBefore,
-          stockAfter
+          stockAfter,
+          findResult.data.image_url  // ← NUEVO: Pasar la URL de la imagen
         )
 
         setScanHistory(prev => {
@@ -230,10 +231,10 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
             barcode: cleanBarcode,
             timestamp: new Date(),
             stockBefore: stockBefore,
-            stockAfter: stockAfter
+            stockAfter: stockAfter,
+            imageUrl: findResult.data.image_url  // ← NUEVO: Guardar imagen en historial local
           }, ...prev]
 
-          // ✅ Guardar en localStorage (se mantiene hasta cerrar el modal)
           localStorage.setItem('scanner_history', JSON.stringify(newHistory))
 
           return newHistory
@@ -300,7 +301,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   }
 
   const closeScanner = async () => {
-    // ✅ Marcar que está cerrando definitivamente
     isClosingRef.current = true
 
     const hadScans = scanCountRef.current > 0
@@ -311,7 +311,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     setScannedProductIds(new Set())
     setNewProductBarcodes(new Set())
 
-    // ✅ Limpiar localStorage SOLO al cerrar definitivamente
     localStorage.removeItem('scanner_history')
 
     if (hadScans) {
@@ -530,24 +529,42 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                     key={`${item.id}-${index}`}
                     className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:bg-gray-100 transition-colors"
                   >
-                    <div className="flex items-start justify-between mb-1">
-                      <h4 className="font-semibold text-gray-900 text-sm">{item.name}</h4>
-                      <span className="text-xs text-gray-500">
-                        {item.timestamp.toLocaleTimeString('es-CO', { 
-                          hour: '2-digit', 
-                          minute: '2-digit',
-                          second: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 mb-2 font-mono">{item.barcode}</p>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-gray-600">Stock:</span>
-                      <span className="font-semibold text-gray-700">{item.stockBefore}</span>
-                      <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
-                      <span className="font-bold text-green-600">{item.stockAfter}</span>
+                    <div className="flex items-start gap-3">
+                      {/* ✨ NUEVO: Imagen del producto */}
+                      <div className="shrink-0 w-16 h-16 bg-gray-100 rounded-lg border-2 border-gray-200 flex items-center justify-center overflow-hidden">
+                        {item.imageUrl ? (
+                          <img 
+                            src={item.imageUrl} 
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ImagePlus className="w-8 h-8 text-gray-400" />
+                        )}
+                      </div>
+
+                      {/* Información del producto */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-1">
+                          <h4 className="font-semibold text-gray-900 text-sm">{item.name}</h4>
+                          <span className="text-xs text-gray-500">
+                            {item.timestamp.toLocaleTimeString('es-CO', { 
+                              hour: '2-digit', 
+                              minute: '2-digit',
+                              second: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 mb-2 font-mono">{item.barcode}</p>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-600">Stock:</span>
+                          <span className="font-semibold text-gray-700">{item.stockBefore}</span>
+                          <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                          </svg>
+                          <span className="font-bold text-green-600">{item.stockAfter}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}

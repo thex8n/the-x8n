@@ -58,7 +58,7 @@ export default function InventoryModeSelectionModal({
                   Registro Manual
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Completa el formulario manualmente
+                  Registra nuevos productos en el inventario de forma sencilla mediante el formulario.
                 </p>
               </div>
             </div>
@@ -79,7 +79,7 @@ export default function InventoryModeSelectionModal({
                   Escaneo Rápido
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Incrementa stock escaneando códigos
+                  Aumenta el stock de los productos de forma rápida mediante el escáner.
                 </p>
               </div>
             </div>

@@ -351,6 +351,7 @@ export async function findProductByBarcode(barcode: string) {
 
 /**
  * Increments a product's stock quantity by 1 - OPTIMIZADO ⚡
+ * ✨ ACTUALIZADO: Ahora retorna también image_url para guardar en historial
  * @param productId - ID of the product to increment
  * @returns Success with updated product data or error message
  */

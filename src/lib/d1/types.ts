@@ -8,6 +8,7 @@ export interface InventoryHistory {
   barcode: string;
   stock_before: number;
   stock_after: number;
+  image_url?: string | null; // ← NUEVO: URL de la imagen del producto
   scanned_at: string; // ISO 8601 datetime string
 }
 
@@ -18,6 +19,7 @@ export interface InventoryHistoryInsert {
   barcode: string;
   stock_before: number;
   stock_after: number;
+  image_url?: string | null; // ← NUEVO: URL de la imagen del producto
 }
 
 // Cloudflare D1 Database binding type

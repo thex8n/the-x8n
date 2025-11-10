@@ -20,7 +20,7 @@ export default function POSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 pb-24 md:pb-8">
+    <div className="p-8 pb-32 pt-20 md:pt-8 md:pb-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">

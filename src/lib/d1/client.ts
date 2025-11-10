@@ -100,6 +100,7 @@ export async function queryInventoryHistory(userId: string): Promise<InventoryHi
 
 /**
  * Insert a new inventory history record
+ * ✨ ACTUALIZADO: Ahora incluye image_url
  */
 export async function insertInventoryHistory(
   data: InventoryHistoryInsert
@@ -113,8 +114,8 @@ export async function insertInventoryHistory(
     // Production: Use D1 binding
     const result = await db
       .prepare(`
-        INSERT INTO inventory_history (id, user_id, product_id, product_name, barcode, stock_before, stock_after, scanned_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO inventory_history (id, user_id, product_id, product_name, barcode, stock_before, stock_after, image_url, scanned_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         RETURNING *
       `)
       .bind(
@@ -124,7 +125,8 @@ export async function insertInventoryHistory(
         data.product_name,
         data.barcode,
         data.stock_before,
-        data.stock_after
+        data.stock_after,
+        data.image_url || null  // ← NUEVO: Pasar image_url
       )
       .first<InventoryHistory>();
 
@@ -136,8 +138,8 @@ export async function insertInventoryHistory(
   } else {
     // Development: Use REST API
     const result = await executeD1Query(
-      `INSERT INTO inventory_history (id, user_id, product_id, product_name, barcode, stock_before, stock_after, scanned_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `INSERT INTO inventory_history (id, user_id, product_id, product_name, barcode, stock_before, stock_after, image_url, scanned_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
        RETURNING *`,
       [
         id,
@@ -147,6 +149,7 @@ export async function insertInventoryHistory(
         data.barcode,
         data.stock_before,
         data.stock_after,
+        data.image_url || null,  // ← NUEVO: Pasar image_url
       ]
     );
 

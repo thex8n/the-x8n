@@ -26,13 +26,15 @@ export async function getInventoryHistoryD1(): Promise<InventoryHistory[]> {
 
 /**
  * Save a new inventory history record to Cloudflare D1
+ * ✨ ACTUALIZADO: Ahora incluye imageUrl
  */
 export async function saveInventoryHistoryD1(
   productId: string,
   productName: string,
   barcode: string,
   stockBefore: number,
-  stockAfter: number
+  stockAfter: number,
+  imageUrl?: string | null  // ← NUEVO: Parámetro opcional para la imagen
 ): Promise<void> {
   const user = await requireAuth();
 
@@ -48,6 +50,7 @@ export async function saveInventoryHistoryD1(
       barcode,
       stock_before: stockBefore,
       stock_after: stockAfter,
+      image_url: imageUrl || null,  // ← NUEVO: Pasar la URL de la imagen
     });
 
     // Revalidate the inventory history page to show the new record
