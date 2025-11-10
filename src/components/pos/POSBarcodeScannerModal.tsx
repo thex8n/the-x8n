@@ -6,8 +6,7 @@ import { X, ShoppingCart, Check, Trash2, AlertCircle } from 'lucide-react'
 import { findProductByBarcode, decrementProductStock } from '@/app/actions/products'
 import { CartItem } from '@/types/cart'
 import { SCAN_COOLDOWN_MS } from '@/constants/ui'
-import { POS_MESSAGES, getPOSStockLimitMessage, getPOSProductAddedMessage, getPOSCartSummaryMessage } from '@/constants/validation'
-import toast from 'react-hot-toast'
+import { POS_MESSAGES, getPOSCartSummaryMessage } from '@/constants/validation'
 
 interface POSBarcodeScannerModalProps {
   onClose: () => void
@@ -149,7 +148,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         () => {}
       )
     } catch (err) {
-      toast.error('No se pudo acceder a la cámara')
       console.error('Error iniciando escáner:', err)
     }
   }
@@ -184,7 +182,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
       const result = await findProductByBarcode(barcode)
 
       if (result.error) {
-        toast.error(result.error)
         if (navigator.vibrate) navigator.vibrate(200)
         setIsProcessing(false)
         isProcessingRef.current = false
@@ -214,20 +211,9 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
 
             onUpdateCart(updatedCart)
 
-            // Toast de éxito
-            toast.success(getPOSProductAddedMessage(product.name, newQuantity, stockAvailable), {
-              icon: '✓',
-              duration: 2000,
-            })
-
             if (navigator.vibrate) navigator.vibrate([100, 50, 100])
           } else {
             // Ya alcanzó el stock máximo
-            toast.error(getPOSStockLimitMessage(product.name, stockAvailable), {
-              icon: '⚠',
-              duration: 3000,
-            })
-
             // Vibración de rechazo
             if (navigator.vibrate) navigator.vibrate([200, 100, 200])
           }
@@ -237,20 +223,9 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
             const updatedCart = [...currentCart, { product: product, quantity: 1 }]
             onUpdateCart(updatedCart)
 
-            // Toast de éxito
-            toast.success(getPOSProductAddedMessage(product.name, 1, stockAvailable), {
-              icon: '✓',
-              duration: 2000,
-            })
-
             if (navigator.vibrate) navigator.vibrate([100, 50, 100])
           } else {
             // Sin stock disponible
-            toast.error(`${product.name}: Sin stock disponible`, {
-              icon: '⚠',
-              duration: 3000,
-            })
-
             if (navigator.vibrate) navigator.vibrate([200, 100, 200])
           }
         }
@@ -264,19 +239,12 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
           scanLockRef.current = false
         }, 800)
       } else {
-        toast.error(POS_MESSAGES.PRODUCT_NOT_FOUND, {
-          icon: '❌',
-          duration: 3000,
-        })
         if (navigator.vibrate) navigator.vibrate(200)
         setIsProcessing(false)
         isProcessingRef.current = false
         scanLockRef.current = false
       }
     } catch (err) {
-      toast.error('Error al procesar el código', {
-        icon: '❌',
-      })
       if (navigator.vibrate) navigator.vibrate(200)
       setIsProcessing(false)
       isProcessingRef.current = false
@@ -330,18 +298,11 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
       for (const item of cart) {
         const result = await decrementProductStock(item.product.id, item.quantity)
         if (result.error) {
-          toast.error(result.error)
           setIsCheckingOut(false)
           setIsScannerActive(true)
           return
         }
       }
-
-      // Toast de éxito
-      toast.success(POS_MESSAGES.CHECKOUT_SUCCESS, {
-        icon: '✓',
-        duration: 3000,
-      })
 
       if (navigator.vibrate) navigator.vibrate([200, 100, 200])
 
@@ -357,7 +318,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
       }, 1000)
 
     } catch (error) {
-      toast.error(POS_MESSAGES.CHECKOUT_ERROR)
       console.error(error)
       setIsScannerActive(true)
     } finally {
