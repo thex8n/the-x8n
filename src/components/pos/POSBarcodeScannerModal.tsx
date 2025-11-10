@@ -453,7 +453,7 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
                             {item.product.name}
                           </p>
                           {isAtLimit && (
-                            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
                           )}
                         </div>
                         <p className="text-xs text-gray-500 mb-1">
