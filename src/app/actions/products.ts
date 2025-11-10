@@ -129,6 +129,7 @@ export async function updateProduct(productId: string, data: ProductFormData) {
 
 /**
  * Deletes a product from the inventory
+ * IMPORTANTE: Elimina también la imagen de R2 si existe
  * @param productId - ID of the product to delete
  * @returns Success or error message
  */
@@ -141,6 +142,40 @@ export async function deleteProduct(productId: string) {
 
   const supabase = await createClient()
 
+  // 🔍 PASO 1: Obtener el producto para saber si tiene imagen
+  const { data: product, error: fetchError } = await supabase
+    .from('products')
+    .select('image_url')
+    .eq('id', productId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (fetchError) {
+    console.error('Error fetching product:', fetchError)
+    return { error: fetchError.message }
+  }
+
+  // 🗑️ PASO 2: Eliminar la imagen de R2 si existe
+  if (product?.image_url) {
+    console.log('🗑️ Eliminando imagen de R2 antes de borrar producto...')
+    try {
+      // Importar dinámicamente para evitar problemas de módulos
+      const { deleteProductImage } = await import('@/app/actions/upload')
+      const deleteResult = await deleteProductImage(product.image_url)
+      
+      if (deleteResult.success) {
+        console.log('✅ Imagen eliminada de R2')
+      } else {
+        console.warn('⚠️ No se pudo eliminar imagen de R2:', deleteResult.error)
+        // Continuamos con la eliminación del producto aunque falle la imagen
+      }
+    } catch (deleteError) {
+      console.error('❌ Error eliminando imagen de R2:', deleteError)
+      // Continuamos con la eliminación del producto aunque falle la imagen
+    }
+  }
+
+  // ❌ PASO 3: Eliminar el producto de la base de datos
   const { error } = await supabase
     .from('products')
     .delete()
@@ -152,6 +187,7 @@ export async function deleteProduct(productId: string) {
     return { error: error.message }
   }
 
+  console.log('✅ Producto eliminado completamente (BD + R2)')
   revalidatePath('/inventory')
   return { success: true }
 }

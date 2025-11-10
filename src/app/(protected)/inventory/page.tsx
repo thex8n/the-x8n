@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, History } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import AddProductForm from '@/components/inventory/AddProductForm'
 import AddCategoryForm from '@/components/inventory/AddCategoryForm'
 import EditProductForm from '@/components/inventory/EditProductForm'
@@ -9,7 +10,7 @@ import ProductList from '@/components/inventory/ProductList'
 import MobileProductList from '@/components/inventory/MobileProductList'
 import ProductStats from '@/components/inventory/ProductStats'
 import SearchBar from '@/components/inventory/SearchBar'
-import CreateMenuModal from '@/components/inventory/CreateMenuModal'
+import InventoryModeSelectionModal from '@/components/inventory/InventoryModeSelectionModal'
 import CategoryFilter from '@/components/inventory/CategoryFilter'
 import MobileSearchHeader from '@/components/inventory/MobileSearchHeader'
 import BarcodeScannerModal from '@/components/inventory/BarcodeScannerModal'
@@ -28,7 +29,8 @@ interface ScannedProduct {
 }
 
 export default function InventoryPage() {
-  const [showCreateMenu, setShowCreateMenu] = useState(false)
+  const router = useRouter()
+  const [showModeSelection, setShowModeSelection] = useState(false)
   const [showAddProductForm, setShowAddProductForm] = useState(false)
   const [showAddCategoryForm, setShowAddCategoryForm] = useState(false)
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
@@ -107,6 +109,16 @@ export default function InventoryPage() {
   const handleCategoryChange = useCallback((categoryId: string | null) => {
     setSelectedCategoryId(categoryId)
   }, [])
+
+  const handleModeSelect = (mode: 'manual' | 'scanner') => {
+    setShowModeSelection(false)
+    if (mode === 'manual') {
+      setScannedBarcode(null)
+      setShowAddProductForm(true)
+    } else if (mode === 'scanner') {
+      setShowBarcodeScanner(true)
+    }
+  }
 
   const handleProductNotFound = (barcode: string) => {
     setScannedBarcode(barcode)
@@ -195,6 +207,7 @@ export default function InventoryPage() {
       <MobileSearchHeader
         onSearch={handleSearch}
         searchQuery={searchQuery}
+        onHistoryClick={() => router.push('/inventory_history')}
       />
 
       <div className="p-8 pb-32 pt-20 md:pt-8 md:pb-8">
@@ -205,7 +218,7 @@ export default function InventoryPage() {
               <SearchBar onSearch={handleSearch} isLoading={loading} />
             </div>
             <button
-              onClick={() => setShowCreateMenu(true)}
+              onClick={() => setShowModeSelection(true)}
               className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors whitespace-nowrap"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -304,13 +317,13 @@ export default function InventoryPage() {
         )}
 
         <button
-          onClick={() => setShowBarcodeScanner(true)}
+          onClick={() => setShowModeSelection(true)}
           className="md:hidden fixed w-16 h-16 bg-black text-white rounded-2xl shadow-2xl transition-all flex items-center justify-center z-40 active:scale-95"
           style={{ 
             bottom: '6rem',
             right: '1.5rem'
           }}
-          aria-label="Escanear código"
+          aria-label="Crear"
         >
           <Plus className="w-10 h-10" strokeWidth={3} />
         </button>
@@ -325,22 +338,10 @@ export default function InventoryPage() {
           />
         )}
 
-        {showCreateMenu && (
-          <CreateMenuModal
-            onClose={() => setShowCreateMenu(false)}
-            onSelectScanner={() => {
-              setShowCreateMenu(false)
-              setShowBarcodeScanner(true)
-            }}
-            onSelectProduct={() => {
-              setShowCreateMenu(false)
-              setScannedBarcode(null)
-              setShowAddProductForm(true)
-            }}
-            onSelectCategory={() => {
-              setShowCreateMenu(false)
-              setShowAddCategoryForm(true)
-            }}
+        {showModeSelection && (
+          <InventoryModeSelectionModal
+            onClose={() => setShowModeSelection(false)}
+            onSelectMode={handleModeSelect}
           />
         )}
 

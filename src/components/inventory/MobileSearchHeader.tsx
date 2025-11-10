@@ -1,14 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Search, X, History } from 'lucide-react'
 
 interface MobileSearchHeaderProps {
   onSearch: (query: string) => void
   searchQuery: string
+  onHistoryClick?: () => void
 }
 
-export default function MobileSearchHeader({ onSearch, searchQuery }: MobileSearchHeaderProps) {
+export default function MobileSearchHeader({ onSearch, searchQuery, onHistoryClick }: MobileSearchHeaderProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   const handleExpand = () => {
@@ -27,8 +28,17 @@ export default function MobileSearchHeader({ onSearch, searchQuery }: MobileSear
   return (
     <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200">
       {!isExpanded ? (
-        // Estado colapsado - Solo botón de lupa
-        <div className="flex items-center justify-end p-4">
+        // Estado colapsado - Botones de lupa e historial
+        <div className="flex items-center justify-end gap-2 p-4">
+          {onHistoryClick && (
+            <button
+              onClick={onHistoryClick}
+              className="p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              aria-label="Ver historial"
+            >
+              <History className="w-6 h-6 text-gray-700" />
+            </button>
+          )}
           <button
             onClick={handleExpand}
             className="p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
