@@ -11,6 +11,7 @@ interface ImageUploadProps {
   currentImageUrl?: string | null
   onImageChange: (url: string | null) => void
   onImageRemove?: () => void
+  onOldImageDelete?: (url: string) => void  // 🆕 Callback para marcar imagen vieja para eliminar
 }
 
 /**
@@ -110,7 +111,7 @@ async function createSquareImage(file: File): Promise<Blob> {
         )
       }
 
-      console.log('📐 Dimensiones finales:', `${targetSize}×${targetSize}`)
+      console.log('📏 Dimensiones finales:', `${targetSize}×${targetSize}`)
 
       // Convertir a WebP con buena calidad
       canvas.toBlob(
@@ -139,6 +140,7 @@ export default function ImageUpload({
   currentImageUrl,
   onImageChange,
   onImageRemove,
+  onOldImageDelete,
 }: ImageUploadProps) {
   const [preview, setPreview] = useState<string | null>(
     currentImageUrl || null
@@ -165,7 +167,7 @@ export default function ImageUpload({
     setUploading(true)
 
     try {
-      console.log('🔄 Iniciando procesamiento de imagen...')
+      console.log('📄 Iniciando procesamiento de imagen...')
 
       // PASO 1: Compresión inicial
       const toastId = toast.loading('Optimizando imagen...')
@@ -225,6 +227,12 @@ export default function ImageUpload({
 
       if (result.success && result.url) {
         onImageChange(result.url)
+        
+        // 🆕 Notificar al formulario que hay una imagen vieja para eliminar
+        if (currentImageUrl && onOldImageDelete) {
+          onOldImageDelete(currentImageUrl)
+        }
+        
         toast.success(`✅ Imagen optimizada (${savings}% más pequeña)`)
       } else {
         toast.error(result.error || 'Error al subir imagen')
@@ -330,9 +338,9 @@ export default function ImageUpload({
             </div>
           </div>
         </div>
-) : (
-  <div className="flex flex-col items-center gap-2">
-    {/* Zona de drop CUADRADA - Mismo tamaño que el preview */}
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          {/* Zona de drop CUADRADA - Mismo tamaño que el preview */}
           <div
             onClick={handleClick}
             className="relative w-[300px] h-[300px] md:w-[400px] md:h-[400px] border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all flex flex-col items-center justify-center"

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { addProduct, getProducts } from '@/app/actions/products'
 import { getCategories } from '@/app/actions/categories'
+import { deleteProductImage } from '@/app/actions/upload'
 import { ProductFormData } from '@/types/product'
 import { Category } from '@/types/category'
 import CategorySelector from './CategorySelector'
@@ -13,7 +14,7 @@ import { PRODUCT_MESSAGES } from '@/constants/validation'
 
 interface AddProductFormProps {
   onClose: () => void
-  onSuccess: (product?: any) => void  // 👈 Ahora acepta el producto como parámetro opcional
+  onSuccess: (product?: any) => void
   initialCode?: string | null
   initialBarcode?: string | null
 }
@@ -24,6 +25,9 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
   const [categories, setCategories] = useState<Category[]>([])
   const [showCategoryForm, setShowCategoryForm] = useState(false)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
+  
+  // 🆕 Guardar la imagen antigua que debe eliminarse al confirmar
+  const [oldImageToDelete, setOldImageToDelete] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
@@ -65,10 +69,6 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
     }
   }
 
-  /**
-   * Generates the next product code by fetching all products
-   * and using the utility function to calculate the next code
-   */
   const generateNextCode = async (): Promise<string> => {
     const result = await getProducts()
     if ('data' in result && result.data) {
@@ -80,6 +80,12 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
   const handleCategorySuccess = () => {
     loadCategories()
     setShowCategoryForm(false)
+  }
+
+  // 🆕 Callback cuando se sube una nueva imagen
+  const handleOldImageDelete = (oldUrl: string) => {
+    console.log('📝 Marcando imagen para eliminar al confirmar:', oldUrl)
+    setOldImageToDelete(oldUrl)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,6 +106,21 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
       return
     }
 
+    // 🆕 ELIMINAR IMAGEN ANTIGUA SI EXISTE (solo al confirmar guardado)
+    if (oldImageToDelete) {
+      console.log('🗑️ Eliminando imagen anterior de R2 al confirmar guardado...')
+      try {
+        const deleteResult = await deleteProductImage(oldImageToDelete)
+        if (deleteResult.success) {
+          console.log('✅ Imagen anterior eliminada de R2')
+        } else {
+          console.warn('⚠️ No se pudo eliminar imagen anterior:', deleteResult.error)
+        }
+      } catch (deleteError) {
+        console.error('❌ Error eliminando imagen anterior:', deleteError)
+      }
+    }
+
     const result = await addProduct({
       ...formData,
       code: finalCode,
@@ -110,9 +131,24 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
       setError(result.error)
       setLoading(false)
     } else {
-      onSuccess(result.data)  // 👈 Pasar el producto creado
+      onSuccess(result.data)
       onClose()
     }
+  }
+
+  // 🆕 Limpiar imagen nueva sin confirmar si cancela
+  const handleCancel = async () => {
+    // Si hay una imagen nueva subida pero no confirmada, eliminarla
+    if (imageUrl && imageUrl !== formData.image_url) {
+      console.log('🗑️ Cancelando: eliminando imagen temporal de R2...')
+      try {
+        await deleteProductImage(imageUrl)
+        console.log('✅ Imagen temporal eliminada')
+      } catch (error) {
+        console.error('❌ Error eliminando imagen temporal:', error)
+      }
+    }
+    onClose()
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -131,7 +167,7 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
     <div
       className="fixed inset-0 bg-black/30 flex items-start justify-center overflow-y-auto"
       style={{ zIndex: 70 }}
-      onClick={onClose}
+      onClick={handleCancel}
     >
       <div
         className="bg-white w-full min-h-full md:min-h-0 md:my-8 md:rounded-lg md:shadow-xl md:max-w-2xl md:max-h-[85vh] overflow-y-auto"
@@ -141,7 +177,7 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
           <div className="flex justify-between items-center mb-4 md:mb-6 bg-gray-100 md:bg-transparent px-4 md:px-0 py-5 md:py-0">
             <h2 className="text-3xl md:text-2xl font-bold text-gray-900">Nuevo Producto</h2>
             <button
-              onClick={onClose}
+              onClick={handleCancel}
               className="text-gray-400 hover:text-gray-600 p-2"
               aria-label="Cerrar"
             >
@@ -295,8 +331,7 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
                   onChange={(categoryId) => setFormData(prev => ({ ...prev, category_id: categoryId }))}
                   categories={categories}
                   onCreateNew={() => setShowCategoryForm(true)}
-                />
-              </div>
+                /></div>
 
               {/* 7. Unidad de Medida */}
               <div>
@@ -319,6 +354,7 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
                 <ImageUpload
                   currentImageUrl={imageUrl}
                   onImageChange={setImageUrl}
+                  onOldImageDelete={handleOldImageDelete}
                 />
               </div>
 
@@ -502,6 +538,7 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
                 <ImageUpload
                   currentImageUrl={imageUrl}
                   onImageChange={setImageUrl}
+                  onOldImageDelete={handleOldImageDelete}
                 />
               </div>
             </div>
@@ -509,7 +546,7 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t sticky bottom-0 bg-white pb-4 px-4 -mx-4 md:px-0 md:mx-0">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleCancel}
                 className="px-6 py-3 text-base text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Cancelar
