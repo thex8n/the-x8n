@@ -16,7 +16,6 @@ interface POSBarcodeScannerModalProps {
 }
 
 export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: POSBarcodeScannerModalProps) {
-  const [error, setError] = useState<string | null>(null)
   const [isScannerActive, setIsScannerActive] = useState(true)
   const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [isManuallyLocked, setIsManuallyLocked] = useState(true)
@@ -29,6 +28,7 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
   const isProcessingRef = useRef<boolean>(false)
   const isManuallyLockedRef = useRef<boolean>(true)
   const isClosingRef = useRef<boolean>(false)
+  const cartRef = useRef<CartItem[]>(cart)
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null)
   const scannerIdRef = useRef('pos-barcode-scanner')
 
@@ -79,6 +79,11 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         localStorage.removeItem('pos_cart')
       }
     }
+  }, [cart])
+
+  // Mantener cartRef sincronizado con cart
+  useEffect(() => {
+    cartRef.current = cart
   }, [cart])
 
   const toggleLock = () => {
@@ -144,7 +149,8 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         () => {}
       )
     } catch (err) {
-      setError('No se pudo acceder a la cámara')
+      toast.error('No se pudo acceder a la cámara')
+      console.error('Error iniciando escáner:', err)
     }
   }
 
@@ -187,22 +193,29 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
       }
 
       if (result.data) {
-        const existingItem = cart.find(item => item.product.id === result.data!.id)
-        const stockAvailable = result.data.stock_quantity
+        const product = result.data
+        const stockAvailable = product.stock_quantity
+
+        // Usar cartRef.current para obtener el estado más reciente del carrito
+        const currentCart = cartRef.current
+        const existingItem = currentCart.find(item => item.product.id === product.id)
 
         if (existingItem) {
           // Producto ya está en el carrito
           if (existingItem.quantity < stockAvailable) {
             // Aún hay stock disponible, agregar al carrito
             const newQuantity = existingItem.quantity + 1
-            onUpdateCart(cart.map(item =>
-              item.product.id === result.data!.id
+
+            const updatedCart = currentCart.map(item =>
+              item.product.id === product.id
                 ? { ...item, quantity: newQuantity }
                 : item
-            ))
+            )
+
+            onUpdateCart(updatedCart)
 
             // Toast de éxito
-            toast.success(getPOSProductAddedMessage(result.data.name, newQuantity, stockAvailable), {
+            toast.success(getPOSProductAddedMessage(product.name, newQuantity, stockAvailable), {
               icon: '✓',
               duration: 2000,
             })
@@ -210,7 +223,7 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
             if (navigator.vibrate) navigator.vibrate([100, 50, 100])
           } else {
             // Ya alcanzó el stock máximo
-            toast.error(getPOSStockLimitMessage(result.data.name, stockAvailable), {
+            toast.error(getPOSStockLimitMessage(product.name, stockAvailable), {
               icon: '⚠',
               duration: 3000,
             })
@@ -221,10 +234,11 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
         } else {
           // Producto nuevo en el carrito
           if (stockAvailable > 0) {
-            onUpdateCart([...cart, { product: result.data, quantity: 1 }])
+            const updatedCart = [...currentCart, { product: product, quantity: 1 }]
+            onUpdateCart(updatedCart)
 
             // Toast de éxito
-            toast.success(getPOSProductAddedMessage(result.data.name, 1, stockAvailable), {
+            toast.success(getPOSProductAddedMessage(product.name, 1, stockAvailable), {
               icon: '✓',
               duration: 2000,
             })
@@ -232,7 +246,7 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
             if (navigator.vibrate) navigator.vibrate([100, 50, 100])
           } else {
             // Sin stock disponible
-            toast.error(`${result.data.name}: Sin stock disponible`, {
+            toast.error(`${product.name}: Sin stock disponible`, {
               icon: '⚠',
               duration: 3000,
             })
@@ -539,23 +553,6 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
           )}
         </div>
       </div>
-
-      {error && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-2xl z-30 shadow-2xl max-w-sm mx-4">
-          <p className="text-red-600 mb-4 text-center font-semibold">{error}</p>
-          <button
-            onClick={() => {
-              setError(null)
-              lastScannedRef.current = null
-              scanLockRef.current = false
-              isProcessingRef.current = false
-            }}
-            className="w-full px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-semibold"
-          >
-            Continuar
-          </button>
-        </div>
-      )}
 
       {/* Modal de confirmación al cerrar */}
       {showConfirmClose && (
