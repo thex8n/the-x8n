@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
-import { X, ShoppingCart, Check, Trash2, AlertCircle } from 'lucide-react'
+import { X, ShoppingCart, Check, Trash2, AlertCircle, ImageIcon } from 'lucide-react'
 import { findProductByBarcode, decrementProductStock } from '@/app/actions/products'
 import { CartItem } from '@/types/cart'
 import { SCAN_COOLDOWN_MS } from '@/constants/ui'
@@ -447,6 +447,21 @@ export default function POSBarcodeScannerModal({ onClose, cart, onUpdateCart }: 
                           : 'bg-gray-50'
                       }`}
                     >
+                      {/* Imagen del producto */}
+                      <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-white border border-gray-200">
+                        {item.product.image_url ? (
+                          <img
+                            src={item.product.image_url}
+                            alt={item.product.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                            <ImageIcon className="w-6 h-6 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-semibold text-gray-900 text-sm truncate">

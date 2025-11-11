@@ -19,7 +19,20 @@ interface ScannedProduct {
   timestamp: Date
   stockBefore: number
   stockAfter: number
-  imageUrl?: string | null  // ← NUEVO: URL de la imagen del producto
+  imageUrl?: string | null
+}
+
+// 🆕 Nueva interfaz para productos agrupados
+interface GroupedProduct {
+  id: string
+  name: string
+  barcode: string
+  imageUrl?: string | null
+  firstTimestamp: Date
+  lastTimestamp: Date
+  initialStock: number
+  currentStock: number
+  incrementCount: number  // +1, +2, +3...
 }
 
 export default function BarcodeScannerModal({ onClose, onProductNotFound, onStockUpdated, initialHistory = [], isPaused = false }: BarcodeScannerModalProps) {
@@ -29,6 +42,10 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   const [isProcessing, setIsProcessing] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null)
   const [scanHistory, setScanHistory] = useState<ScannedProduct[]>(initialHistory)
+  
+  // 🆕 Estado para productos agrupados (lo que se muestra en UI)
+  const [groupedProducts, setGroupedProducts] = useState<Map<string, GroupedProduct>>(new Map())
+  
   const [showConfirmClose, setShowConfirmClose] = useState(false)
   const [isManuallyLocked, setIsManuallyLocked] = useState(true)
   const [scanSuccess, setScanSuccess] = useState(false)
@@ -214,16 +231,17 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
 
         const stockAfter = updateResult.data?.stock_quantity || stockBefore + 1
 
-        // ✨ NUEVO: Pasar image_url al guardar en historial
+        // 💾 Guardar en D1 (cada escaneo individual)
         await saveInventoryHistoryD1(
           findResult.data.id,
           findResult.data.name,
           cleanBarcode,
           stockBefore,
           stockAfter,
-          findResult.data.image_url  // ← NUEVO: Pasar la URL de la imagen
+          findResult.data.image_url
         )
 
+        // 📝 Guardar en historial local (cada escaneo)
         setScanHistory(prev => {
           const newHistory = [{
             id: findResult.data.id,
@@ -232,12 +250,44 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
             timestamp: new Date(),
             stockBefore: stockBefore,
             stockAfter: stockAfter,
-            imageUrl: findResult.data.image_url  // ← NUEVO: Guardar imagen en historial local
+            imageUrl: findResult.data.image_url
           }, ...prev]
 
           localStorage.setItem('scanner_history', JSON.stringify(newHistory))
 
           return newHistory
+        })
+
+        // 🆕 Actualizar productos agrupados (para UI)
+        setGroupedProducts(prev => {
+          const newMap = new Map(prev)
+          const productId = findResult.data.id
+          const existing = newMap.get(productId)
+
+          if (existing) {
+            // Producto ya existe: incrementar contador y actualizar stock
+            newMap.set(productId, {
+              ...existing,
+              lastTimestamp: new Date(),
+              currentStock: stockAfter,
+              incrementCount: existing.incrementCount + 1
+            })
+          } else {
+            // Producto nuevo: crear entrada
+            newMap.set(productId, {
+              id: productId,
+              name: findResult.data.name,
+              barcode: cleanBarcode,
+              imageUrl: findResult.data.image_url,
+              firstTimestamp: new Date(),
+              lastTimestamp: new Date(),
+              initialStock: stockBefore,
+              currentStock: stockAfter,
+              incrementCount: 1
+            })
+          }
+
+          return newMap
         })
 
         setMessage({
@@ -336,6 +386,11 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
       navigator.vibrate(40)
     }
   }
+
+  // 🆕 Convertir Map a Array para renderizar (ordenado por último escaneo)
+  const groupedProductsArray = Array.from(groupedProducts.values()).sort(
+    (a, b) => b.lastTimestamp.getTime() - a.lastTimestamp.getTime()
+  )
 
   return (
     <div 
@@ -506,16 +561,16 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                     <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
                   )}
                 </div>
-                {scanHistory.length > 0 && (
+                {groupedProductsArray.length > 0 && (
                   <span className="text-sm font-normal text-gray-500">
-                    {scanHistory.length} {scanHistory.length === 1 ? 'producto' : 'productos'}
+                    {groupedProductsArray.length} {groupedProductsArray.length === 1 ? 'producto' : 'productos'}
                   </span>
                 )}
               </h3>
               <div className="h-px bg-gray-200 mt-3"></div>
             </div>
 
-            {scanHistory.length === 0 ? (
+            {groupedProductsArray.length === 0 ? (
               <div className="flex-1 flex items-center justify-center text-gray-400">
                 <div className="text-center">
                   <ScrollText className="w-24 h-24 mx-auto mb-4 opacity-50" />
@@ -524,13 +579,13 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
-                {scanHistory.map((item, index) => (
+                {groupedProductsArray.map((item) => (
                   <div 
-                    key={`${item.id}-${index}`}
+                    key={item.id}
                     className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-start gap-3">
-                      {/* ✨ NUEVO: Imagen del producto */}
+                      {/* Imagen del producto */}
                       <div className="shrink-0 w-16 h-16 bg-gray-100 rounded-lg border-2 border-gray-200 flex items-center justify-center overflow-hidden">
                         {item.imageUrl ? (
                           <img 
@@ -548,7 +603,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                         <div className="flex items-start justify-between mb-1">
                           <h4 className="font-semibold text-gray-900 text-sm">{item.name}</h4>
                           <span className="text-xs text-gray-500">
-                            {item.timestamp.toLocaleTimeString('es-CO', { 
+                            {item.lastTimestamp.toLocaleTimeString('es-CO', { 
                               hour: '2-digit', 
                               minute: '2-digit',
                               second: '2-digit'
@@ -556,13 +611,22 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                           </span>
                         </div>
                         <p className="text-xs text-gray-600 mb-2 font-mono">{item.barcode}</p>
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-gray-600">Stock:</span>
-                          <span className="font-semibold text-gray-700">{item.stockBefore}</span>
-                          <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                          </svg>
-                          <span className="font-bold text-green-600">{item.stockAfter}</span>
+                        
+                        {/* 🆕 NUEVO FORMATO: +X | Total: Y */}
+                        <div className="flex items-center gap-3 text-sm">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-600">Stock:</span>
+                            <span className="font-bold text-green-600 text-base">
+                              +{item.incrementCount}
+                            </span>
+                          </div>
+                          <div className="h-4 w-px bg-gray-300"></div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-600">Total:</span>
+                            <span className="font-bold text-blue-600 text-base">
+                              {item.currentStock}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
