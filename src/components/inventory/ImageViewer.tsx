@@ -436,37 +436,38 @@ export default function ImageViewer({
       </div>
 
       <div
-        ref={imageContainerRef}
-        className="fixed inset-0 z-111 flex items-center justify-center overflow-hidden"
-        style={{
-          paddingTop: '4rem', // Espacio para el header
-          touchAction: 'none' // Prevenir zoom del navegador en móvil
-        }}
+        className="fixed inset-0 z-111 flex items-center justify-center p-4"
         onClick={(e) => {
           if (scale === 1) handleClose()
-          else {
-            e.stopPropagation()
-            handleDoubleTap(e)
-          }
         }}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
       >
         <div
-          className="relative w-full h-full flex items-center justify-center"
-          style={getImageStyle()}
+          ref={imageContainerRef}
+          className="relative max-w-4xl max-h-full overflow-hidden"
+          style={{
+            ...getImageStyle(),
+            touchAction: 'none' // Prevenir zoom del navegador en móvil
+          }}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleDoubleTap(e)
+          }}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
+
           <img
             src={currentImage}
             alt={productName}
-            className="max-w-full max-h-full object-contain pointer-events-none select-none"
+            className="w-full h-auto object-contain rounded-lg pointer-events-none select-none"
             style={{
+              maxHeight: 'calc(100vh - 8rem)',
               transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
               transition: isPanning ? 'none' : 'transform 0.2s ease-out',
               cursor: scale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default'
