@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { updateProduct } from '@/app/actions/products'
 import { getCategories } from '@/app/actions/categories'
 import { deleteProductImage } from '@/app/actions/upload'
@@ -9,6 +9,7 @@ import { Category } from '@/types/category'
 import CategorySelector from './CategorySelector'
 import AddCategoryForm from './AddCategoryForm'
 import ImageUpload from '@/components/ui/ImageUpload'
+import ImageViewer from './ImageViewer'
 
 interface EditProductFormProps {
   product: Product
@@ -23,6 +24,8 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
   const [showCategoryForm, setShowCategoryForm] = useState(false)
   const [imageUrl, setImageUrl] = useState<string | null>(product.image_url)
   const [oldImageToDelete, setOldImageToDelete] = useState<string | null>(null)
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
+  const imageRef = useRef<HTMLDivElement>(null)
 
   const [formData, setFormData] = useState<ProductFormData>({
     name: product.name,
@@ -124,12 +127,12 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
 
   return (
     <div
-      className="fixed inset-0 bg-black/30 flex items-start justify-center overflow-y-auto"
+      className={`fixed inset-0 bg-black/30 flex items-start justify-center ${isImageViewerOpen ? 'overflow-hidden' : 'overflow-y-auto'}`}
       style={{ zIndex: 70 }}
       onClick={handleCancel}
     >
       <div
-        className="bg-white w-full min-h-full md:min-h-0 md:my-8 md:rounded-lg md:shadow-xl md:max-w-3xl md:max-h-[85vh] overflow-y-auto"
+        className={`bg-white w-full min-h-full md:min-h-0 md:my-8 md:rounded-lg md:shadow-xl md:max-w-3xl md:max-h-[85vh] ${isImageViewerOpen ? 'overflow-hidden' : 'overflow-y-auto'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="pb-32 md:p-6 md:pb-6">
@@ -307,11 +310,37 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
 
             {/* Imagen del Producto */}
             <div>
-              <ImageUpload
-                currentImageUrl={imageUrl}
-                onImageChange={setImageUrl}
-                onOldImageDelete={handleOldImageDelete}
-              />
+              {imageUrl ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-2 uppercase">
+                    Imagen del Producto
+                  </label>
+                  <div
+                    ref={imageRef}
+                    onClick={() => setIsImageViewerOpen(true)}
+                    className="relative w-32 h-32 cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 hover:border-blue-400 transition-colors"
+                  >
+                    <img
+                      src={imageUrl}
+                      alt="Vista previa del producto"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-center justify-center">
+                      <div className="opacity-0 hover:opacity-100 transition-opacity">
+                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <ImageUpload
+                  currentImageUrl={imageUrl}
+                  onImageChange={setImageUrl}
+                  onOldImageDelete={handleOldImageDelete}
+                />
+              )}
             </div>
 
             {/* Producto Activo */}
@@ -357,6 +386,20 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
           />
         )}
       </div>
+
+      {isImageViewerOpen && imageUrl && imageRef.current && (
+        <ImageViewer
+          imageUrl={imageUrl}
+          productName={formData.name || 'Producto'}
+          productId={product.id}
+          onClose={() => setIsImageViewerOpen(false)}
+          onImageUpdate={(newUrl) => {
+            setImageUrl(newUrl)
+            // No cerrar aquí - el ImageViewer se cierra solo después del checkmark.
+          }}
+          originRect={imageRef.current.getBoundingClientRect()}
+        />
+      )}
     </div>
   )
 }
