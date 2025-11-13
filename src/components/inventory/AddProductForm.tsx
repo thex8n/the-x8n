@@ -425,7 +425,7 @@ export default function AddProductForm({ onClose, onSuccess, initialCode, initia
           onClose={() => setIsImageViewerOpen(false)}
           onImageUpdate={(newUrl) => {
             setImageUrl(newUrl)
-            // No cerrar aquí - el ImageViewer se cierra solo después del checkmark
+            // No cerrar aquí - el ImageViewer se cierra solo después del checkmark.
           }}
           originRect={imageRef.current.getBoundingClientRect()}
         />
