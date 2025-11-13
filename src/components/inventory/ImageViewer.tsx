@@ -31,6 +31,7 @@ export default function ImageViewer({
   const [error, setError] = useState<string | null>(null)
   const [currentImage, setCurrentImage] = useState(imageUrl)
   const [tempImageUrl, setTempImageUrl] = useState<string | null>(null)
+  const [hasOpenedOnce, setHasOpenedOnce] = useState(false)
 
   // Estados para zoom y pan
   const [scale, setScale] = useState(1)
@@ -38,10 +39,15 @@ export default function ImageViewer({
   const [isPanning, setIsPanning] = useState(false)
   const [startPos, setStartPos] = useState({ x: 0, y: 0 })
   const [lastPinchDistance, setLastPinchDistance] = useState<number | null>(null)
+  const [isResetting, setIsResetting] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const imageContainerRef = useRef<HTMLDivElement>(null)
+  const lastWheelTimeRef = useRef<number>(0)
+  const wheelFocalPointRef = useRef<{ x: number; y: number } | null>(null)
+  const accumulatedDeltaRef = useRef(0)
+  const wheelAnimationFrameRef = useRef<number | null>(null)
 
   // Bloquear scroll y zoom del viewport
   useEffect(() => {
@@ -100,12 +106,24 @@ export default function ImageViewer({
       }
 
       document.removeEventListener('touchmove', preventZoom)
+      
+      // Limpiar animación pendiente
+      if (wheelAnimationFrameRef.current) {
+        cancelAnimationFrame(wheelAnimationFrameRef.current)
+      }
 
       window.scrollTo(scrollX, scrollY)
     }
   }, [])
 
-  // Cerrar con ESC
+  // Marcar que ya se abrió después de la animación inicial
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setHasOpenedOnce(true)
+    }, 250) // Después de la animación de entrada (200ms)
+    
+    return () => clearTimeout(timer)
+  }, [])
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !showOptions && !showCropModal) handleClose()
@@ -116,6 +134,10 @@ export default function ImageViewer({
 
   const handleClose = () => {
     if (uploading) return
+    
+    // Resetear zoom antes de cerrar para la animación (exactamente 1 para activar animación)
+    setScale(1)
+    setPosition({ x: 0, y: 0 })
     
     setIsClosing(true)
     setTimeout(() => {
@@ -198,17 +220,113 @@ export default function ImageViewer({
     return Math.sqrt(dx * dx + dy * dy)
   }
 
+  // Función para calcular límites de pan
+  const calculatePanLimits = () => {
+    if (!imageContainerRef.current || scale <= 1) {
+      return { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+    }
+
+    const container = imageContainerRef.current
+    const rect = container.getBoundingClientRect()
+    
+    const containerWidth = rect.width
+    const containerHeight = rect.height
+    
+    const maxX = (containerWidth * (scale - 1)) / 2
+    const maxY = (containerHeight * (scale - 1)) / 2
+    
+    return {
+      minX: -maxX,
+      maxX: maxX,
+      minY: -maxY,
+      maxY: maxY
+    }
+  }
+
+  const applyPanLimits = (newPosition: { x: number; y: number }) => {
+    if (scale <= 1) return { x: 0, y: 0 }
+    
+    const limits = calculatePanLimits()
+    
+    return {
+      x: Math.max(limits.minX, Math.min(limits.maxX, newPosition.x)),
+      y: Math.max(limits.minY, Math.min(limits.maxY, newPosition.y))
+    }
+  }
+
   // Manejar zoom con rueda del mouse
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
-    const delta = e.deltaY * -0.001
-    const newScale = Math.min(Math.max(1, scale + delta), 4)
-    setScale(newScale)
-
-    // Si vuelve a escala 1, resetear posición
-    if (newScale === 1) {
-      setPosition({ x: 0, y: 0 })
+    
+    const now = Date.now()
+    const timeSinceLastWheel = now - lastWheelTimeRef.current
+    
+    // Si han pasado más de 150ms desde el último wheel, es un nuevo gesto de zoom
+    if (timeSinceLastWheel > 150 || !wheelFocalPointRef.current) {
+      // Guardar el punto focal SOLO al inicio del gesto
+      if (imageContainerRef.current) {
+        const rect = imageContainerRef.current.getBoundingClientRect()
+        wheelFocalPointRef.current = {
+          x: e.clientX - rect.left - rect.width / 2,
+          y: e.clientY - rect.top - rect.height / 2
+        }
+      }
+      accumulatedDeltaRef.current = 0
     }
+    
+    lastWheelTimeRef.current = now
+    
+    // Acumular el delta para suavizar
+    accumulatedDeltaRef.current += e.deltaY
+    
+    // Cancelar animación anterior si existe
+    if (wheelAnimationFrameRef.current) {
+      cancelAnimationFrame(wheelAnimationFrameRef.current)
+    }
+    
+    // Aplicar zoom en el siguiente frame para mejor rendimiento
+    wheelAnimationFrameRef.current = requestAnimationFrame(() => {
+      const delta = accumulatedDeltaRef.current * -0.001
+      
+      // Resetear acumulador
+      accumulatedDeltaRef.current = 0
+      
+      // Solo aplicar si el cambio es significativo
+      if (Math.abs(delta) < 0.01) return
+      
+      const previousScale = scale
+      const newScale = Math.min(Math.max(1, scale + delta), 5)
+      
+      // Solo actualizar si hay un cambio real de escala
+      if (Math.abs(newScale - previousScale) < 0.02) return
+      
+      // Usar el punto focal guardado SOLO para zoom IN
+      if (wheelFocalPointRef.current && newScale > previousScale) {
+        const { x, y } = wheelFocalPointRef.current
+        const factor = (newScale - previousScale) / previousScale
+        const newPosition = {
+          x: position.x - x * factor,
+          y: position.y - y * factor
+        }
+        setPosition(applyPanLimits(newPosition))
+      } else if (newScale < previousScale) {
+        // Para zoom OUT, solo ajustar límites sin cambiar el centro
+        const scaleFactor = newScale / previousScale
+        const newPosition = {
+          x: position.x * scaleFactor,
+          y: position.y * scaleFactor
+        }
+        setPosition(applyPanLimits(newPosition))
+      }
+      
+      setScale(newScale)
+
+      if (newScale <= 1.01) {
+        setScale(1.0000001)
+        setPosition({ x: 0, y: 0 })
+        wheelFocalPointRef.current = null
+      }
+    })
   }
 
   // Manejar inicio de pan (mouse)
@@ -222,10 +340,11 @@ export default function ImageViewer({
   // Manejar movimiento de pan (mouse)
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isPanning && scale > 1) {
-      setPosition({
+      const newPosition = {
         x: e.clientX - startPos.x,
         y: e.clientY - startPos.y
-      })
+      }
+      setPosition(applyPanLimits(newPosition))
     }
   }
 
@@ -236,18 +355,15 @@ export default function ImageViewer({
 
   // Manejar pinch-to-zoom y pan (touch)
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Prevenir comportamiento por defecto solo cuando hay múltiples toques
     if (e.touches.length > 1) {
       e.preventDefault()
       e.stopPropagation()
     }
 
     if (e.touches.length === 2) {
-      // Inicio de pinch
       const distance = getDistance(e.touches[0], e.touches[1])
       setLastPinchDistance(distance)
     } else if (e.touches.length === 1 && scale > 1) {
-      // Inicio de pan
       setIsPanning(true)
       setStartPos({
         x: e.touches[0].clientX - position.x,
@@ -258,29 +374,45 @@ export default function ImageViewer({
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 2 && lastPinchDistance !== null) {
-      // Pinch zoom - prevenir zoom del navegador
       e.preventDefault()
       e.stopPropagation()
 
       const distance = getDistance(e.touches[0], e.touches[1])
-      const delta = (distance - lastPinchDistance) * 0.01
-      const newScale = Math.min(Math.max(1, scale + delta), 4)
+      const delta = (distance - lastPinchDistance) * 0.015
+      const newScale = Math.min(Math.max(1, scale + delta), 5)
+      
+      if (imageContainerRef.current && newScale !== scale) {
+        const rect = imageContainerRef.current.getBoundingClientRect()
+        const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2
+        const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2
+        const x = centerX - rect.left - rect.width / 2
+        const y = centerY - rect.top - rect.height / 2
+        
+        const factor = (newScale - scale) / scale
+        const newPosition = {
+          x: position.x - x * factor,
+          y: position.y - y * factor
+        }
+        setPosition(applyPanLimits(newPosition))
+      } else {
+        setPosition(applyPanLimits(position))
+      }
+      
       setScale(newScale)
       setLastPinchDistance(distance)
 
-      // Si vuelve a escala 1, resetear posición
       if (newScale === 1) {
         setPosition({ x: 0, y: 0 })
       }
     } else if (e.touches.length === 1 && isPanning && scale > 1) {
-      // Pan - solo prevenir cuando hay zoom activo
       e.preventDefault()
       e.stopPropagation()
 
-      setPosition({
+      const newPosition = {
         x: e.touches[0].clientX - startPos.x,
         y: e.touches[0].clientY - startPos.y
-      })
+      }
+      setPosition(applyPanLimits(newPosition))
     }
   }
 
@@ -298,18 +430,56 @@ export default function ImageViewer({
     const DOUBLE_TAP_DELAY = 300
 
     if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
-      // Doble tap detectado
-      if (scale === 1) {
-        setScale(2)
+      e.preventDefault()
+      e.stopPropagation()
+      
+      if (scale <= 1.001) {
+        if (imageContainerRef.current) {
+          const rect = imageContainerRef.current.getBoundingClientRect()
+          let clientX, clientY
+          
+          if ('touches' in e) {
+            clientX = e.changedTouches[0].clientX
+            clientY = e.changedTouches[0].clientY
+          } else {
+            clientX = e.clientX
+            clientY = e.clientY
+          }
+          
+          const x = clientX - rect.left - rect.width / 2
+          const y = clientY - rect.top - rect.height / 2
+          
+          const targetScale = 2.5
+          const factor = (targetScale - 1)
+          
+          setIsResetting(false)
+          setScale(targetScale)
+          
+          const newPosition = {
+            x: -x * factor,
+            y: -y * factor
+          }
+          setPosition(applyPanLimits(newPosition))
+        }
       } else {
-        setScale(1)
+        // Activar animación sutil para el reset
+        setIsResetting(false)
+        // Quitar zoom con un valor ligeramente diferente de 1 para evitar animación de entrada
+        setScale(1.0000001)
         setPosition({ x: 0, y: 0 })
       }
     }
     lastTapRef.current = now
   }
 
+  // 🎬 ANIMACIONES VERSIÓN 1 - SIN CAMBIOS EN EL CONTENEDOR
   const getImageStyle = () => {
+    // Solo aplicar animación cuando NO hay zoom activo (scale debe ser exactamente 1)
+    if (scale > 1.001 || scale < 0.999) return {}
+    
+    // Si ya se abrió una vez, no aplicar animación de entrada
+    if (hasOpenedOnce && !isClosing) return {}
+    
     if (!originRect) return {}
 
     const windowWidth = window.innerWidth
@@ -438,7 +608,10 @@ export default function ImageViewer({
       <div
         className="fixed inset-0 z-111 flex items-center justify-center p-4"
         onClick={(e) => {
-          if (scale === 1) handleClose()
+          // Cerrar si el clic fue directamente en este contenedor (no en la imagen)
+          if (e.target === e.currentTarget) {
+            handleClose()
+          }
         }}
       >
         <div
@@ -446,7 +619,7 @@ export default function ImageViewer({
           className="relative max-w-4xl max-h-full overflow-hidden"
           style={{
             ...getImageStyle(),
-            touchAction: 'none' // Prevenir zoom del navegador en móvil
+            touchAction: 'none'
           }}
           onClick={(e) => {
             e.stopPropagation()
