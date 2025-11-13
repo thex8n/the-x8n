@@ -26,6 +26,7 @@ interface ScannedProduct {
   timestamp: Date
   stockBefore: number
   stockAfter: number
+  imageUrl?: string | null
 }
 
 export default function InventoryPage() {
@@ -121,8 +122,11 @@ export default function InventoryPage() {
     }
   }
 
-  const handleProductNotFound = (barcode: string) => {
+  const [onHistoryAddCallback, setOnHistoryAddCallback] = useState<((item: ScannedProduct) => void) | null>(null)
+
+  const handleProductNotFound = (barcode: string, onHistoryAdd: (item: ScannedProduct) => void) => {
     setScannedBarcode(barcode)
+    setOnHistoryAddCallback(() => onHistoryAdd)
     setShowAddProductForm(true)
   }
 
@@ -149,7 +153,8 @@ export default function InventoryPage() {
       barcode: scannedBarcode || newProduct.barcode || '',
       timestamp: new Date(),
       stockBefore: 0,
-      stockAfter: newProduct.stock_quantity
+      stockAfter: newProduct.stock_quantity,
+      imageUrl: newProduct.image_url
     }
 
     history.unshift(newHistoryItem)
@@ -157,8 +162,32 @@ export default function InventoryPage() {
     setScannerHistory(history)
     localStorage.setItem('scanner_history', JSON.stringify(history))
 
+    // Guardar en D1 database
+    try {
+      await fetch('/api/inventory-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: newProduct.id,
+          product_name: newProduct.name,
+          barcode: scannedBarcode || newProduct.barcode || '',
+          stock_before: 0,
+          stock_after: newProduct.stock_quantity,
+          image_url: newProduct.image_url
+        })
+      })
+    } catch (err) {
+      console.error('Error guardando en D1:', err)
+    }
+
+    // Notificar al scanner para actualizar su historial interno
+    if (onHistoryAddCallback) {
+      onHistoryAddCallback(newHistoryItem)
+    }
+
     setShowAddProductForm(false)
     setScannedBarcode(null)
+    setOnHistoryAddCallback(null)
   }
 
   const handleScannerClose = () => {

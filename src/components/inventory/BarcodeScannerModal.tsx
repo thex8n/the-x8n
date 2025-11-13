@@ -6,7 +6,7 @@ import { ImagePlus } from 'lucide-react'
 
 interface BarcodeScannerModalProps {
   onClose: () => void
-  onProductNotFound?: (barcode: string) => void
+  onProductNotFound?: (barcode: string, onHistoryAdd: (item: ScannedProduct) => void) => void
   onStockUpdated?: () => void
   initialHistory?: ScannedProduct[]
   isPaused?: boolean
@@ -312,7 +312,45 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
 
         setTimeout(() => {
           if (onProductNotFound) {
-            onProductNotFound(cleanBarcode)
+            // Crear función callback para agregar al historial
+            const handleHistoryAdd = (newItem: ScannedProduct) => {
+              // Agregar al historial local
+              setScanHistory(prev => {
+                const newHistory = [newItem, ...prev]
+                localStorage.setItem('scanner_history', JSON.stringify(newHistory))
+                return newHistory
+              })
+
+              // Actualizar productos agrupados
+              setGroupedProducts(prev => {
+                const newMap = new Map(prev)
+                const existing = newMap.get(newItem.id)
+
+                if (existing) {
+                  // Actualizar producto existente
+                  existing.lastTimestamp = newItem.timestamp
+                  existing.currentStock = newItem.stockAfter
+                  existing.incrementCount += 1
+                } else {
+                  // Crear nuevo producto agrupado
+                  newMap.set(newItem.id, {
+                    id: newItem.id,
+                    name: newItem.name,
+                    barcode: newItem.barcode,
+                    imageUrl: newItem.imageUrl,
+                    firstTimestamp: newItem.timestamp,
+                    lastTimestamp: newItem.timestamp,
+                    initialStock: newItem.stockBefore,
+                    currentStock: newItem.stockAfter,
+                    incrementCount: 1
+                  })
+                }
+
+                return newMap
+              })
+            }
+
+            onProductNotFound(cleanBarcode, handleHistoryAdd)
           }
         }, 800)
       }
