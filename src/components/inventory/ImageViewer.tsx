@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, Pencil, Camera, ImagePlus, Loader2, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Pencil, Camera, ImagePlus, Loader2 } from 'lucide-react'
 import { useEffect, useState, useRef } from 'react'
 import { uploadProductImage } from '@/app/actions/upload'
 import { updateProductImage } from '@/app/actions/products'
@@ -29,7 +29,6 @@ export default function ImageViewer({
   const [showOptions, setShowOptions] = useState(false)
   const [showCropModal, setShowCropModal] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [updated, setUpdated] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentImage, setCurrentImage] = useState(imageUrl)
   const [tempImageUrl, setTempImageUrl] = useState<string | null>(null)
@@ -50,6 +49,15 @@ export default function ImageViewer({
   const wheelFocalPointRef = useRef<{ x: number; y: number } | null>(null)
   const accumulatedDeltaRef = useRef(0)
   const wheelAnimationFrameRef = useRef<number | null>(null)
+  const isMountedRef = useRef(true)
+
+  // Rastrear si el componente está montado
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   // Bloquear scroll y zoom del viewport
   useEffect(() => {
@@ -171,9 +179,27 @@ export default function ImageViewer({
 
   const handleCropComplete = async (croppedBlob: Blob) => {
     setError(null)
-    setUploading(true)
     setShowCropModal(false)
 
+    // ✨ MAGIA: Mostrar spinner por 1s, luego la imagen (mientras sube en segundo plano)
+    const localUrl = URL.createObjectURL(croppedBlob)
+    setUploading(true)
+
+    // Esperar 1 segundo para crear la ilusión de carga rápida
+    setTimeout(() => {
+      // Solo actualizar si el componente sigue montado
+      if (isMountedRef.current) {
+        setCurrentImage(localUrl)
+        setUploading(false)
+
+        // 🎯 Actualizar la lista con la imagen local (solo si el visor sigue abierto)
+        if (onImageUpdate && productId) {
+          onImageUpdate(localUrl)
+        }
+      }
+    }, 1000)
+
+    // Mientras tanto, subir en segundo plano
     try {
       const formData = new FormData()
       formData.append('file', croppedBlob, 'product.webp')
@@ -181,51 +207,56 @@ export default function ImageViewer({
       const uploadResult = await uploadProductImage(formData)
 
       if (uploadResult.success && uploadResult.url) {
-        // ✅ Actualizar la imagen PRIMERO, antes de quitar el spinner
-        setCurrentImage(uploadResult.url)
+        // Reemplazar URL local con URL del servidor silenciosamente
+        URL.revokeObjectURL(localUrl)
+
+        // Solo actualizar estado si el componente sigue montado
+        if (isMountedRef.current) {
+          setCurrentImage(uploadResult.url)
+
+          // Actualizar la lista con la URL del servidor (solo si el visor sigue abierto)
+          if (onImageUpdate && productId) {
+            onImageUpdate(uploadResult.url)
+          }
+        }
 
         // Si NO hay productId, solo actualizar localmente (para formulario de agregar)
         if (!productId) {
-          setUploading(false) // Quitar spinner después de actualizar imagen
-          setUpdated(true)
-
-          if (onImageUpdate) {
-            onImageUpdate(uploadResult.url)
-          }
-
-          // Ocultar mensaje de éxito después de 2 segundos
-          setTimeout(() => {
-            setUpdated(false)
-          }, 2000)
+          // No hacer nada más, ya está actualizado localmente
         } else {
           // Si hay productId, actualizar en la base de datos (producto existente)
           const updateResult = await updateProductImage(productId, uploadResult.url)
 
           if (updateResult.success) {
-            setUploading(false) // Quitar spinner después de actualizar imagen
-            setUpdated(true)
-
-            if (onImageUpdate) {
-              onImageUpdate(uploadResult.url)
-            }
-
-            // Ocultar mensaje de éxito después de 2 segundos
-            setTimeout(() => {
-              setUpdated(false)
-            }, 2000)
+            // Actualización exitosa en el servidor
           } else {
-            setError(updateResult.error || 'Error al actualizar producto')
-            setUploading(false)
+            // Solo actualizar estado si el componente sigue montado
+            if (isMountedRef.current) {
+              setError(updateResult.error || 'Error al actualizar producto')
+              // Revertir a la imagen original si falla
+              URL.revokeObjectURL(localUrl)
+              setCurrentImage(imageUrl)
+            }
           }
         }
       } else {
-        setError(uploadResult.error || 'Error al subir imagen')
-        setUploading(false)
+        // Solo actualizar estado si el componente sigue montado
+        if (isMountedRef.current) {
+          setError(uploadResult.error || 'Error al subir imagen')
+          // Revertir a la imagen original si falla
+          URL.revokeObjectURL(localUrl)
+          setCurrentImage(imageUrl)
+        }
       }
     } catch (err) {
       console.error('Error processing image:', err)
-      setError('Error al procesar imagen')
-      setUploading(false)
+      // Solo actualizar estado si el componente sigue montado
+      if (isMountedRef.current) {
+        setError('Error al procesar imagen')
+        // Revertir a la imagen original si falla
+        URL.revokeObjectURL(localUrl)
+        setCurrentImage(imageUrl)
+      }
     } finally {
       if (tempImageUrl) {
         URL.revokeObjectURL(tempImageUrl)
@@ -632,7 +663,7 @@ export default function ImageViewer({
             e.stopPropagation()
             setShowOptions(true)
           }}
-          disabled={uploading || updated}
+          disabled={uploading}
           className="md:hidden p-4 hover:bg-white/10 rounded-full transition-all"
           aria-label="Editar imagen"
         >
@@ -655,9 +686,7 @@ export default function ImageViewer({
           className="relative max-w-4xl max-h-full overflow-hidden"
           style={{
             ...getImageStyle(),
-            touchAction: 'none',
-            minHeight: uploading ? '400px' : 'auto',
-            minWidth: uploading ? '400px' : 'auto'
+            touchAction: 'none'
           }}
           onClick={(e) => {
             e.stopPropagation()
@@ -689,21 +718,10 @@ export default function ImageViewer({
             />
           )}
 
-          {/* Spinner mientras sube */}
+          {/* Spinner mientras sube - ilusión de carga rápida */}
           {uploading && (
             <div className="flex items-center justify-center w-full h-full min-h-[400px]">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="w-12 h-12 text-white animate-spin" />
-                <span className="text-white text-sm font-medium">Subiendo imagen...</span>
-              </div>
-            </div>
-          )}
-
-          {/* Checkmark cuando termina de subir */}
-          {updated && (
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
-              <CheckCircle className="w-5 h-5" />
-              <span className="font-medium">¡Actualizado!</span>
+              <Loader2 className="w-12 h-12 text-white animate-spin" />
             </div>
           )}
 
@@ -715,7 +733,7 @@ export default function ImageViewer({
         </div>
       </div>
 
-      {showOptions && !uploading && !updated && (
+      {showOptions && !uploading && (
         <>
           <div
             className="fixed inset-0 bg-black/50 z-112"
