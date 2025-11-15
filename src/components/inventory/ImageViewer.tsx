@@ -1,7 +1,7 @@
 'use client'
 
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { uploadProductImage } from '@/app/actions/upload'
 import { updateProductImage } from '@/app/actions/products'
 import ImageCropModal from '@/components/inventory/ImageCropModal'
@@ -11,6 +11,72 @@ import { FaRegTrashCan } from "react-icons/fa6"
 import { LuImagePlus } from "react-icons/lu"
 import { GrGallery } from "react-icons/gr"
 import { PiCameraBold } from "react-icons/pi"
+
+// ============================================================================
+// TIPOS Y CONSTANTES
+// ============================================================================
+
+interface Point {
+  x: number
+  y: number
+}
+
+interface ViewerConfig {
+  readonly ANIMATION_DURATION: number
+  readonly MIN_SCALE: number
+  readonly MAX_SCALE: number
+  readonly ZOOM_STEP: number
+  readonly DOUBLE_TAP_ZOOM: number
+  readonly DOUBLE_TAP_DELAY: number
+  readonly WHEEL_SENSITIVITY: number
+  readonly WHEEL_TIMEOUT: number
+  readonly PINCH_SENSITIVITY: number
+  readonly UPLOAD_DELAY: number
+}
+
+const VIEWER_CONFIG: ViewerConfig = {
+  ANIMATION_DURATION: 250,
+  MIN_SCALE: 1,
+  MAX_SCALE: 5,
+  ZOOM_STEP: 0.001,
+  DOUBLE_TAP_ZOOM: 2.5,
+  DOUBLE_TAP_DELAY: 300,
+  WHEEL_SENSITIVITY: 0.001,
+  WHEEL_TIMEOUT: 150,
+  PINCH_SENSITIVITY: 0.015,
+  UPLOAD_DELAY: 1000
+} as const
+
+// ============================================================================
+// UTILIDADES PURAS
+// ============================================================================
+
+/**
+ * Calcula la distancia entre dos puntos touch
+ */
+const getDistance = (touch1: React.Touch, touch2: React.Touch): number => {
+  const dx = touch1.clientX - touch2.clientX
+  const dy = touch1.clientY - touch2.clientY
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+/**
+ * Limita un valor entre un mínimo y máximo
+ */
+const clamp = (value: number, min: number, max: number): number => {
+  return Math.max(min, Math.min(max, value))
+}
+
+/**
+ * Verifica si una escala está cerca de 1 (para reset)
+ */
+const isScaleNearOne = (scale: number, threshold: number = 0.02): boolean => {
+  return Math.abs(scale - 1) < threshold
+}
+
+// ============================================================================
+// INTERFACES
+// ============================================================================
 
 interface ImageViewerProps {
   imageUrl: string
@@ -22,6 +88,17 @@ interface ImageViewerProps {
   getUpdatedRect?: () => DOMRect | null
 }
 
+interface PanLimits {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+}
+
+// ============================================================================
+// COMPONENTE PRINCIPAL
+// ============================================================================
+
 export default function ImageViewer({
   imageUrl,
   productName,
@@ -31,6 +108,10 @@ export default function ImageViewer({
   originRect,
   getUpdatedRect
 }: ImageViewerProps) {
+  // ============================================================================
+  // ESTADO
+  // ============================================================================
+  
   const [isClosing, setIsClosing] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
   const [isClosingOptions, setIsClosingOptions] = useState(false)
@@ -43,23 +124,134 @@ export default function ImageViewer({
   const [hasOpenedOnce, setHasOpenedOnce] = useState(false)
   const [closingRect, setClosingRect] = useState<DOMRect | null>(null)
 
+  // Estado de zoom y pan
   const [scale, setScale] = useState(1)
-  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [position, setPosition] = useState<Point>({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 })
+  const [startPos, setStartPos] = useState<Point>({ x: 0, y: 0 })
   const [lastPinchDistance, setLastPinchDistance] = useState<number | null>(null)
 
+  // ============================================================================
+  // REFS
+  // ============================================================================
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const imageContainerRef = useRef<HTMLDivElement>(null)
   const lastWheelTimeRef = useRef<number>(0)
-  const wheelFocalPointRef = useRef<{ x: number; y: number } | null>(null)
+  const wheelFocalPointRef = useRef<Point | null>(null)
   const accumulatedDeltaRef = useRef(0)
   const wheelAnimationFrameRef = useRef<number | null>(null)
   const isMountedRef = useRef(true)
+  const lastTapRef = useRef<number>(0)
 
-  const hasImage = currentImage && currentImage.trim() !== ''
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
+  
+  const hasImage = useMemo(() => {
+    return currentImage && currentImage.trim() !== ''
+  }, [currentImage])
 
+  // ============================================================================
+  // UTILIDADES CON ESTADO
+  // ============================================================================
+  
+  /**
+   * Calcula los límites de paneo basados en la escala actual
+   */
+  const calculatePanLimits = useCallback((): PanLimits => {
+    if (!imageContainerRef.current || scale <= 1) {
+      return { minX: 0, maxX: 0, minY: 0, maxY: 0 }
+    }
+
+    const container = imageContainerRef.current
+    const rect = container.getBoundingClientRect()
+    
+    const maxX = (rect.width * (scale - 1)) / 2
+    const maxY = (rect.height * (scale - 1)) / 2
+    
+    return {
+      minX: -maxX,
+      maxX: maxX,
+      minY: -maxY,
+      maxY: maxY
+    }
+  }, [scale])
+
+  /**
+   * Aplica límites al paneo para que no se salga
+   */
+  const applyPanLimits = useCallback((newPosition: Point): Point => {
+    if (scale <= 1) return { x: 0, y: 0 }
+    
+    const limits = calculatePanLimits()
+    
+    return {
+      x: clamp(newPosition.x, limits.minX, limits.maxX),
+      y: clamp(newPosition.y, limits.minY, limits.maxY)
+    }
+  }, [scale, calculatePanLimits])
+
+  /**
+   * Genera el transform inicial para animación desde origen
+   */
+  const getInitialTransform = useCallback((): string => {
+    if (!originRect) return 'scale(0.95)'
+    
+    const windowWidth = window.innerWidth
+    const windowHeight = window.innerHeight
+    const centerX = windowWidth / 2
+    const centerY = windowHeight / 2
+    const originX = originRect.left + originRect.width / 2
+    const originY = originRect.top + originRect.height / 2
+
+    const thumbnailSize = originRect.width || 80
+    const initialScale = thumbnailSize / Math.min(windowWidth, windowHeight)
+    
+    return `translate(${originX - centerX}px, ${originY - centerY}px) scale(${initialScale})`
+  }, [originRect])
+
+  /**
+   * Calcula el estilo de la imagen para animaciones
+   */
+  const getImageStyle = useCallback(() => {
+    if (!hasImage) return {}
+
+    if (!isScaleNearOne(scale, 0.001)) return {}
+    if (hasOpenedOnce && !isClosing) return {}
+    if (!originRect) return {}
+
+    const windowWidth = window.innerWidth
+    const windowHeight = window.innerHeight
+    const centerX = windowWidth / 2
+    const centerY = windowHeight / 2
+
+    if (isClosing) {
+      const targetRect = closingRect || originRect
+      const targetX = targetRect.left + targetRect.width / 2
+      const targetY = targetRect.top + targetRect.height / 2
+      const targetSize = targetRect.width || 80
+      const targetScale = targetSize / Math.min(windowWidth, windowHeight)
+
+      return {
+        transform: `translate(${targetX - centerX}px, ${targetY - centerY}px) scale(${targetScale})`,
+        transition: 'transform 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+        opacity: 1
+      }
+    }
+
+    return {
+      transform: 'translate(0, 0) scale(1)',
+      transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+      animation: originRect ? 'expandFromOrigin 0.2s cubic-bezier(0.4, 0, 0.2, 1)' : 'fadeIn 0.15s ease-out'
+    }
+  }, [hasImage, scale, hasOpenedOnce, isClosing, originRect, closingRect])
+
+  // ============================================================================
+  // EFECTOS: Lifecycle y limpieza
+  // ============================================================================
+  
   useEffect(() => {
     isMountedRef.current = true
     return () => {
@@ -132,20 +324,31 @@ export default function ImageViewer({
   useEffect(() => {
     const timer = setTimeout(() => {
       setHasOpenedOnce(true)
-    }, 250)
+    }, VIEWER_CONFIG.ANIMATION_DURATION)
     
     return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !showOptions && !showCropModal && !showDeleteModal) handleClose()
+      if (e.key === 'Escape' && !showOptions && !showCropModal && !showDeleteModal) {
+        handleClose()
+      }
     }
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [showOptions, showCropModal, showDeleteModal])
 
-  const handleClose = () => {
+  useEffect(() => {
+    setScale(1)
+    setPosition({ x: 0, y: 0 })
+  }, [currentImage])
+
+  // ============================================================================
+  // HANDLERS: Interacciones principales
+  // ============================================================================
+  
+  const handleClose = useCallback(() => {
     if (uploading) return
 
     const updatedRect = getUpdatedRect ? getUpdatedRect() : null
@@ -161,10 +364,10 @@ export default function ImageViewer({
 
     setTimeout(() => {
       onClose()
-    }, 250)
-  }
+    }, VIEWER_CONFIG.ANIMATION_DURATION)
+  }, [uploading, getUpdatedRect, onClose])
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation()
     e.preventDefault()
     const file = e.target.files?.[0]
@@ -174,9 +377,9 @@ export default function ImageViewer({
     setTempImageUrl(tempUrl)
     setShowOptions(false)
     setShowCropModal(true)
-  }
+  }, [])
 
-  const handleCropComplete = async (croppedBlob: Blob) => {
+  const handleCropComplete = useCallback(async (croppedBlob: Blob) => {
     setError(null)
     setShowCropModal(false)
 
@@ -189,7 +392,7 @@ export default function ImageViewer({
       if (isMountedRef.current) {
         setUploading(false)
       }
-    }, 1000)
+    }, VIEWER_CONFIG.UPLOAD_DELAY)
 
     try {
       const formData = new FormData()
@@ -242,25 +445,25 @@ export default function ImageViewer({
         setTempImageUrl(null)
       }
     }
-  }
+  }, [imageUrl, onImageUpdate, productId, tempImageUrl])
 
-  const handleTakePhoto = () => {
+  const handleTakePhoto = useCallback(() => {
     cameraInputRef.current?.click()
-  }
+  }, [])
 
-  const handleChooseFromGallery = () => {
+  const handleChooseFromGallery = useCallback(() => {
     fileInputRef.current?.click()
-  }
+  }, [])
 
-  const closeOptions = () => {
+  const closeOptions = useCallback(() => {
     setIsClosingOptions(true)
     setTimeout(() => {
       setShowOptions(false)
       setIsClosingOptions(false)
     }, 200)
-  }
+  }, [])
 
-  const handleDeleteImage = async () => {
+  const handleDeleteImage = useCallback(async () => {
     if (!productId) return
 
     setShowDeleteModal(false)
@@ -284,59 +487,19 @@ export default function ImageViewer({
     } finally {
       setUploading(false)
     }
-  }
+  }, [productId, onImageUpdate, handleClose])
 
-  useEffect(() => {
-    setScale(1)
-    setPosition({ x: 0, y: 0 })
-  }, [currentImage])
-
-  const getDistance = (touch1: React.Touch, touch2: React.Touch) => {
-    const dx = touch1.clientX - touch2.clientX
-    const dy = touch1.clientY - touch2.clientY
-    return Math.sqrt(dx * dx + dy * dy)
-  }
-
-  const calculatePanLimits = () => {
-    if (!imageContainerRef.current || scale <= 1) {
-      return { minX: 0, maxX: 0, minY: 0, maxY: 0 }
-    }
-
-    const container = imageContainerRef.current
-    const rect = container.getBoundingClientRect()
-    
-    const containerWidth = rect.width
-    const containerHeight = rect.height
-    
-    const maxX = (containerWidth * (scale - 1)) / 2
-    const maxY = (containerHeight * (scale - 1)) / 2
-    
-    return {
-      minX: -maxX,
-      maxX: maxX,
-      minY: -maxY,
-      maxY: maxY
-    }
-  }
-
-  const applyPanLimits = (newPosition: { x: number; y: number }) => {
-    if (scale <= 1) return { x: 0, y: 0 }
-    
-    const limits = calculatePanLimits()
-    
-    return {
-      x: Math.max(limits.minX, Math.min(limits.maxX, newPosition.x)),
-      y: Math.max(limits.minY, Math.min(limits.maxY, newPosition.y))
-    }
-  }
-
-  const handleWheel = (e: React.WheelEvent) => {
+  // ============================================================================
+  // HANDLERS: Zoom con rueda del mouse
+  // ============================================================================
+  
+  const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
     
     const now = Date.now()
     const timeSinceLastWheel = now - lastWheelTimeRef.current
     
-    if (timeSinceLastWheel > 150 || !wheelFocalPointRef.current) {
+    if (timeSinceLastWheel > VIEWER_CONFIG.WHEEL_TIMEOUT || !wheelFocalPointRef.current) {
       if (imageContainerRef.current) {
         const rect = imageContainerRef.current.getBoundingClientRect()
         wheelFocalPointRef.current = {
@@ -355,13 +518,17 @@ export default function ImageViewer({
     }
     
     wheelAnimationFrameRef.current = requestAnimationFrame(() => {
-      const delta = accumulatedDeltaRef.current * -0.001
+      const delta = accumulatedDeltaRef.current * -VIEWER_CONFIG.WHEEL_SENSITIVITY
       accumulatedDeltaRef.current = 0
       
       if (Math.abs(delta) < 0.01) return
       
       const previousScale = scale
-      const newScale = Math.min(Math.max(1, scale + delta), 5)
+      const newScale = clamp(
+        scale + delta,
+        VIEWER_CONFIG.MIN_SCALE,
+        VIEWER_CONFIG.MAX_SCALE
+      )
       
       if (Math.abs(newScale - previousScale) < 0.02) return
       
@@ -384,22 +551,26 @@ export default function ImageViewer({
       
       setScale(newScale)
 
-      if (newScale <= 1.01) {
+      if (isScaleNearOne(newScale, 0.01)) {
         setScale(1.0000001)
         setPosition({ x: 0, y: 0 })
         wheelFocalPointRef.current = null
       }
     })
-  }
+  }, [scale, position, applyPanLimits])
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // ============================================================================
+  // HANDLERS: Pan con mouse
+  // ============================================================================
+  
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (scale > 1) {
       setIsPanning(true)
       setStartPos({ x: e.clientX - position.x, y: e.clientY - position.y })
     }
-  }
+  }, [scale, position])
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isPanning && scale > 1) {
       const newPosition = {
         x: e.clientX - startPos.x,
@@ -407,13 +578,17 @@ export default function ImageViewer({
       }
       setPosition(applyPanLimits(newPosition))
     }
-  }
+  }, [isPanning, scale, startPos, applyPanLimits])
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsPanning(false)
-  }
+  }, [])
 
-  const handleTouchStart = (e: React.TouchEvent) => {
+  // ============================================================================
+  // HANDLERS: Touch (pinch zoom y pan)
+  // ============================================================================
+  
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length > 1) {
       e.preventDefault()
       e.stopPropagation()
@@ -429,16 +604,20 @@ export default function ImageViewer({
         y: e.touches[0].clientY - position.y
       })
     }
-  }
+  }, [scale, position])
 
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2 && lastPinchDistance !== null) {
       e.preventDefault()
       e.stopPropagation()
 
       const distance = getDistance(e.touches[0], e.touches[1])
-      const delta = (distance - lastPinchDistance) * 0.015
-      const newScale = Math.min(Math.max(1, scale + delta), 5)
+      const delta = (distance - lastPinchDistance) * VIEWER_CONFIG.PINCH_SENSITIVITY
+      const newScale = clamp(
+        scale + delta,
+        VIEWER_CONFIG.MIN_SCALE,
+        VIEWER_CONFIG.MAX_SCALE
+      )
       
       if (imageContainerRef.current && newScale !== scale) {
         const rect = imageContainerRef.current.getBoundingClientRect()
@@ -473,25 +652,27 @@ export default function ImageViewer({
       }
       setPosition(applyPanLimits(newPosition))
     }
-  }
+  }, [lastPinchDistance, scale, position, isPanning, startPos, applyPanLimits])
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 0) {
       setIsPanning(false)
       setLastPinchDistance(null)
     }
-  }
+  }, [])
 
-  const lastTapRef = useRef<number>(0)
-  const handleDoubleTap = (e: React.MouseEvent | React.TouchEvent) => {
+  // ============================================================================
+  // HANDLER: Doble tap para zoom
+  // ============================================================================
+  
+  const handleDoubleTap = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const now = Date.now()
-    const DOUBLE_TAP_DELAY = 300
 
-    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+    if (now - lastTapRef.current < VIEWER_CONFIG.DOUBLE_TAP_DELAY) {
       e.preventDefault()
       e.stopPropagation()
       
-      if (scale <= 1.001) {
+      if (isScaleNearOne(scale, 0.001)) {
         if (imageContainerRef.current) {
           const rect = imageContainerRef.current.getBoundingClientRect()
           let clientX, clientY
@@ -507,7 +688,7 @@ export default function ImageViewer({
           const x = clientX - rect.left - rect.width / 2
           const y = clientY - rect.top - rect.height / 2
           
-          const targetScale = 2.5
+          const targetScale = VIEWER_CONFIG.DOUBLE_TAP_ZOOM
           const factor = (targetScale - 1)
 
           setScale(targetScale)
@@ -524,57 +705,11 @@ export default function ImageViewer({
       }
     }
     lastTapRef.current = now
-  }
+  }, [scale, applyPanLimits])
 
-  const getImageStyle = () => {
-    if (!hasImage) return {}
-
-    if (scale > 1.001 || scale < 0.999) return {}
-    if (hasOpenedOnce && !isClosing) return {}
-    if (!originRect) return {}
-
-    const windowWidth = window.innerWidth
-    const windowHeight = window.innerHeight
-
-    const centerX = windowWidth / 2
-    const centerY = windowHeight / 2
-
-    if (isClosing) {
-      const targetRect = closingRect || originRect
-      const targetX = targetRect.left + targetRect.width / 2
-      const targetY = targetRect.top + targetRect.height / 2
-      const targetSize = targetRect.width || 80
-      const targetScale = targetSize / Math.min(windowWidth, windowHeight)
-
-      return {
-        transform: `translate(${targetX - centerX}px, ${targetY - centerY}px) scale(${targetScale})`,
-        transition: 'transform 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-        opacity: 1
-      }
-    }
-
-    return {
-      transform: 'translate(0, 0) scale(1)',
-      transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-      animation: originRect ? 'expandFromOrigin 0.2s cubic-bezier(0.4, 0, 0.2, 1)' : 'fadeIn 0.15s ease-out'
-    }
-  }
-
-  const getInitialTransform = () => {
-    if (!originRect) return 'scale(0.95)'
-    
-    const windowWidth = window.innerWidth
-    const windowHeight = window.innerHeight
-    const centerX = windowWidth / 2
-    const centerY = windowHeight / 2
-    const originX = originRect.left + originRect.width / 2
-    const originY = originRect.top + originRect.height / 2
-
-    const thumbnailSize = originRect.width || 80
-    const initialScale = thumbnailSize / Math.min(windowWidth, windowHeight)
-    
-    return `translate(${originX - centerX}px, ${originY - centerY}px) scale(${initialScale})`
-  }
+  // ============================================================================
+  // RENDER
+  // ============================================================================
 
   return (
     <>
@@ -660,6 +795,7 @@ export default function ImageViewer({
         }
       `}</style>
 
+      {/* Overlay negro */}
       <div
         className="fixed inset-0 bg-black/90 z-110 overscroll-none touch-none"
         style={{
@@ -673,6 +809,7 @@ export default function ImageViewer({
         onTouchMove={(e) => e.preventDefault()}
       />
 
+      {/* Header */}
       <div
         className="fixed top-3 sm:top-4 left-3 sm:left-4 right-3 sm:right-4 z-112 flex items-center justify-between"
         style={{
@@ -690,7 +827,9 @@ export default function ImageViewer({
           aria-label="Volver"
         >
           <IoMdArrowRoundBack className="w-6 h-6 text-white" strokeWidth={2.5} />
-          <span className="text-white font-medium text-sm" style={{ fontFamily: 'MomoTrustDisplay, sans-serif' }}>Imagen del producto</span>
+          <span className="text-white font-medium text-sm" style={{ fontFamily: 'MomoTrustDisplay, sans-serif' }}>
+            Imagen del producto
+          </span>
         </button>
 
         {hasImage ? (
@@ -734,6 +873,7 @@ export default function ImageViewer({
         )}
       </div>
 
+      {/* Contenedor de imagen */}
       <div
         className="fixed inset-0 z-111 flex items-center justify-center p-4"
         onClick={(e) => {
@@ -768,7 +908,6 @@ export default function ImageViewer({
           onTouchMove={hasImage ? handleTouchMove : undefined}
           onTouchEnd={hasImage ? handleTouchEnd : undefined}
         >
-
           {!uploading && hasImage && (
             <img
               key={currentImage}
@@ -813,6 +952,7 @@ export default function ImageViewer({
         </div>
       </div>
 
+      {/* Modal de opciones */}
       {showOptions && !uploading && (
         <>
           <div
@@ -870,6 +1010,7 @@ export default function ImageViewer({
         </>
       )}
 
+      {/* Inputs de archivo */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -889,6 +1030,7 @@ export default function ImageViewer({
         className="hidden"
       />
 
+      {/* Modal de crop */}
       {showCropModal && tempImageUrl && (
         <ImageCropModal
           imageUrl={tempImageUrl}
@@ -903,6 +1045,7 @@ export default function ImageViewer({
         />
       )}
 
+      {/* Modal de confirmación de eliminación */}
       {showDeleteModal && (
         <>
           <div
