@@ -33,6 +33,7 @@ export default function ImageViewer({
 }: ImageViewerProps) {
   const [isClosing, setIsClosing] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
+  const [isClosingOptions, setIsClosingOptions] = useState(false)
   const [showCropModal, setShowCropModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -57,7 +58,6 @@ export default function ImageViewer({
   const wheelAnimationFrameRef = useRef<number | null>(null)
   const isMountedRef = useRef(true)
 
-  // Detectar si hay imagen
   const hasImage = currentImage && currentImage.trim() !== ''
 
   useEffect(() => {
@@ -180,14 +180,11 @@ export default function ImageViewer({
     setError(null)
     setShowCropModal(false)
 
-    // 🎯 Crear URL local del blob
     const localUrl = URL.createObjectURL(croppedBlob)
     
-    // ✅ Mostrar imagen local inmediatamente
     setCurrentImage(localUrl)
     setUploading(true)
 
-    // Simular delay visual
     setTimeout(() => {
       if (isMountedRef.current) {
         setUploading(false)
@@ -201,24 +198,17 @@ export default function ImageViewer({
       const uploadResult = await uploadProductImage(formData)
 
       if (uploadResult.success && uploadResult.url) {
-        // ✅ Cache-busting con timestamp
         const cacheBustedUrl = uploadResult.url + '?t=' + Date.now()
 
-        // 🎯 SOLUCIÓN: NO cambiar currentImage, mantener la local
-        // setCurrentImage(cacheBustedUrl) ← ESTO SE QUITA
-
-        // ✅ Actualizar lista en segundo plano
         if (onImageUpdate) {
           onImageUpdate(cacheBustedUrl)
         }
 
-        // ✅ Actualizar base de datos
         if (productId) {
           const updateResult = await updateProductImage(productId, uploadResult.url)
 
           if (!updateResult.success && isMountedRef.current) {
             setError(updateResult.error || 'Error al actualizar producto')
-            // Solo en caso de error, volver a la imagen original
             setCurrentImage(imageUrl)
             if (onImageUpdate) {
               onImageUpdate(imageUrl)
@@ -226,9 +216,6 @@ export default function ImageViewer({
             URL.revokeObjectURL(localUrl)
           }
         }
-
-        // 🗑️ NO revocar el blob: aquí porque lo estamos usando
-        // Se revocará cuando el usuario cierre el viewer o el componente se desmonte
       } else {
         if (isMountedRef.current) {
           setError(uploadResult.error || 'Error al subir imagen')
@@ -265,6 +252,14 @@ export default function ImageViewer({
     fileInputRef.current?.click()
   }
 
+  const closeOptions = () => {
+    setIsClosingOptions(true)
+    setTimeout(() => {
+      setShowOptions(false)
+      setIsClosingOptions(false)
+    }, 200)
+  }
+
   const handleDeleteImage = async () => {
     if (!productId) return
 
@@ -272,16 +267,13 @@ export default function ImageViewer({
     setUploading(true)
 
     try {
-      // Actualizar producto con imagen null o URL por defecto
       const result = await updateProductImage(productId, '')
 
       if (result.success) {
-        // Notificar al componente padre
         if (onImageUpdate) {
           onImageUpdate('')
         }
 
-        // Cerrar el viewer
         handleClose()
       } else {
         setError(result.error || 'Error al eliminar imagen')
@@ -535,7 +527,6 @@ export default function ImageViewer({
   }
 
   const getImageStyle = () => {
-    // Sin animación si no hay imagen
     if (!hasImage) return {}
 
     if (scale > 1.001 || scale < 0.999) return {}
@@ -612,8 +603,42 @@ export default function ImageViewer({
           to { transform: translateY(0); }
         }
 
+        @keyframes slideDown {
+          from { 
+            transform: translateY(0);
+            opacity: 1;
+          }
+          to { 
+            transform: translateY(100%);
+            opacity: 0;
+          }
+        }
+
         .animate-slideUp {
-          animation: slideUp 0.3s ease-out;
+          animation: slideUp 0.25s ease-out;
+        }
+
+        .animate-slideDown {
+          animation: slideDown 0.2s ease-in forwards;
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fadeInUp {
+          animation: fadeInUp 0.4s ease-out;
+        }
+
+        .animate-fadeInUp-delayed {
+          animation: fadeInUp 0.4s ease-out 0.1s both;
         }
       `}</style>
 
@@ -712,7 +737,6 @@ export default function ImageViewer({
               e.stopPropagation()
               handleDoubleTap(e)
             } else {
-              // Si no hay imagen, permitir cerrar al hacer clic en el contenido
               e.stopPropagation()
               handleClose()
             }
@@ -777,11 +801,11 @@ export default function ImageViewer({
             className="fixed inset-0 bg-black/50 z-112"
             onClick={(e) => {
               e.stopPropagation()
-              setShowOptions(false)
+              closeOptions()
             }}
           />
           
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-113 animate-slideUp shadow-2xl">
+          <div className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-113 shadow-2xl ${isClosingOptions ? 'animate-slideDown' : 'animate-slideUp'}`}>
             <div className="flex justify-center pt-2 pb-3">
               <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
             </div>
@@ -793,10 +817,11 @@ export default function ImageViewer({
                   onClick={(e) => {
                     e.stopPropagation()
                     handleTakePhoto()
+                    closeOptions()
                   }}
-                  className="flex flex-col items-center gap-2 py-3 hover:bg-gray-50 rounded-xl transition-colors"
+                  className="flex flex-col items-center gap-2 py-3 rounded-xl animate-fadeInUp-delayed"
                 >
-                  <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center" style={{ border: '2.5px solid black', boxShadow: '0 0 8px rgba(0, 0, 0, 0.35)' }}>
+                  <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center" style={{ border: '2.5px solid black' }}>
                     <PiCameraBold className="w-7 h-7 text-gray-700" />
                   </div>
                   <span className="text-xs text-gray-600 font-medium" style={{ fontFamily: 'MomoTrustDisplay, sans-serif' }}>Foto</span>
@@ -807,15 +832,15 @@ export default function ImageViewer({
                   onClick={(e) => {
                     e.stopPropagation()
                     handleChooseFromGallery()
+                    closeOptions()
                   }}
-                  className="flex flex-col items-center gap-2 py-3 hover:bg-gray-50 rounded-xl transition-colors"
+                  className="flex flex-col items-center gap-2 py-3 rounded-xl animate-fadeInUp-delayed"
                 >
                   <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center" style={{
                     border: '3px solid transparent',
                     backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #ff0000, #ff1a00, #ff3300, #ff4d00, #ff6600, #ff8000, #ff9900, #ffb300, #ffcc00, #ffe600, #ffff00, #e6ff00, #ccff00, #b3ff00, #99ff00, #80ff00, #66ff00, #4dff00, #33ff00, #1aff00, #00ff00, #00ff1a, #00ff33, #00ff4d, #00ff66, #00ff80, #00ff99, #00ffb3, #00ffcc, #00ffe6, #00ffff, #00e6ff, #00ccff, #00b3ff, #0099ff, #0080ff, #0066ff, #004dff, #0033ff, #001aff, #0000ff, #1a00ff, #3300ff, #4d00ff, #6600ff, #8000ff, #9900ff, #b300ff, #cc00ff, #e600ff, #ff00ff, #ff00e6, #ff00cc, #ff00b3, #ff0099, #ff0080, #ff0066, #ff004d, #ff0033, #ff001a, #ff0000)',
                     backgroundOrigin: 'border-box',
-                    backgroundClip: 'padding-box, border-box',
-                    boxShadow: '0 0 8px rgba(0, 0, 0, 0.15)'
+                    backgroundClip: 'padding-box, border-box'
                   }}>
                     <GrGallery className="w-7 h-7 text-gray-700" />
                   </div>
