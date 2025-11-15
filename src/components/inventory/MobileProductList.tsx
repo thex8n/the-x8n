@@ -24,6 +24,10 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
     originRect: DOMRect | null 
   } | null>(null)
   const [localProducts, setLocalProducts] = useState(products)
+  
+  // 🎯 NUEVO: Guardar imágenes locales temporales
+  const [tempImageUrls, setTempImageUrls] = useState<Record<string, string>>({})
+  
   const imageRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useState(() => {
@@ -50,27 +54,40 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
     const imgElement = imageRefs.current[productId]
     const rect = imgElement?.getBoundingClientRect() || null
     
+    // 🎯 Usar imagen temporal si existe, sino la real
+    const displayUrl = tempImageUrls[productId] || imageUrl
+    
     setViewingImage({
-      url: imageUrl,
+      url: displayUrl,
       name: productName,
       productId: productId,
       originRect: rect
     })
   }
 
-  const handleImageUpdate = (productId: string, newImageUrl: string) => {
-    setLocalProducts(prevProducts => 
-      prevProducts.map(product => 
-        product.id === productId 
-          ? { ...product, image_url: newImageUrl }
-          : product
+  // 🎯 MODIFICADO: Manejar tanto imágenes temporales como del servidor
+  const handleImageUpdate = (productId: string, newImageUrl: string, isTemporary: boolean = false) => {
+    if (isTemporary) {
+      // Guardar imagen temporal (blob:)
+      setTempImageUrls(prev => ({
+        ...prev,
+        [productId]: newImageUrl
+      }))
+    } else {
+      // Actualizar con imagen del servidor
+      setLocalProducts(prevProducts => 
+        prevProducts.map(product => 
+          product.id === productId 
+            ? { ...product, image_url: newImageUrl }
+            : product
+        )
       )
-    )
-    
-    if (viewingImage && viewingImage.productId === productId) {
-      setViewingImage({
-        ...viewingImage,
-        url: newImageUrl
+      
+      // Limpiar imagen temporal después de que se suba al servidor
+      setTempImageUrls(prev => {
+        const newTemp = { ...prev }
+        delete newTemp[productId]
+        return newTemp
       })
     }
   }
@@ -104,6 +121,9 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
       <div className="space-y-2 pb-4">
         {localProducts.map((product) => {
           const isLowStock = product.stock_quantity <= product.minimum_stock
+          
+          // 🎯 Usar imagen temporal si existe, sino la real
+          const displayImageUrl = tempImageUrls[product.id] || product.image_url
 
           return (
             <div
@@ -139,15 +159,15 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
                         }}
                         className="w-20 h-20 bg-gray-100 rounded-xl border-2 border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer active:scale-95 transition-transform"
                         onClick={() => {
-                          if (product.image_url) {
-                            handleImageClick(product.id, product.image_url, product.name)
+                          if (displayImageUrl) {
+                            handleImageClick(product.id, displayImageUrl, product.name)
                           }
                         }}
                       >
-                        {product.image_url ? (
+                        {displayImageUrl ? (
                           <img 
-                            key={product.image_url}
-                            src={product.image_url} 
+                            key={displayImageUrl}
+                            src={displayImageUrl} 
                             alt={product.name}
                             className="w-full h-full object-cover"
                           />
