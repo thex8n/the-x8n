@@ -18,7 +18,7 @@ export default function InventoryModeSelectionModal({
   }
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 pb-24 md:pb-4"
       onClick={handleBackdropClick}
     >

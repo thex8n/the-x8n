@@ -58,6 +58,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     productId: string
     originRect: DOMRect | null
   } | null>(null)
+  const [lockStateBeforeImage, setLockStateBeforeImage] = useState(false)
   const imageRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const html5QrCodeRef = useRef<any>(null)
@@ -424,14 +425,16 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     }
   }
 
-  const handleImageClick = (productId: string, imageUrl: string, productName: string) => {
+  const handleImageClick = (productId: string, imageUrl: string | null, productName: string) => {
     const imgElement = imageRefs.current[productId]
     const rect = imgElement?.getBoundingClientRect() || null
 
+    // Guardar el estado actual del bloqueo antes de abrir la imagen
+    setLockStateBeforeImage(isManuallyLocked)
     setIsManuallyLocked(true)
 
     setViewingImage({
-      url: imageUrl,
+      url: imageUrl || '', // Permite URL vacía para productos sin imagen
       name: productName,
       productId: productId,
       originRect: rect
@@ -561,7 +564,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         <button
           onClick={toggleLock}
           disabled={isProcessing || isPaused}
-          className={`absolute inset-0 rounded-3xl transition-all flex flex-col items-center justify-center ${
+          className={`absolute inset-0 rounded-3xl flex flex-col items-center justify-center transition-all duration-150 ease-out ${
             isProcessing || isPaused
               ? 'cursor-not-allowed'
               : 'cursor-pointer active:scale-[0.98]'
@@ -571,16 +574,22 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
               : 'bg-transparent'
           }`}
         >
-          {isManuallyLocked && (
-            <>
-              <img
-                src="/imagen/scanner.png"
-                alt="Scanner locked"
-                className="w-3/4 h-3/4 object-contain opacity-10 absolute"
-              />
-              <span className="text-white text-xl sm:text-2xl font-bold z-10">Desbloquear</span>
-            </>
-          )}
+          <img
+            src="/imagen/scanner.png"
+            alt="Scanner locked"
+            className={`w-3/4 h-3/4 object-contain absolute transition-opacity duration-150 ease-out ${
+              isManuallyLocked ? 'opacity-10' : 'opacity-0'
+            }`}
+          />
+          <span
+            className={`text-white text-xl sm:text-2xl font-bold z-10 transition-all duration-150 ease-out ${
+              isManuallyLocked
+                ? 'opacity-100 scale-100'
+                : 'opacity-0 scale-95 pointer-events-none'
+            }`}
+          >
+            Desbloquear
+          </span>
         </button>
       </div>
 
@@ -652,14 +661,8 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                         ref={(el) => {
                           imageRefs.current[item.id] = el
                         }}
-                        onClick={() => {
-                          if (item.imageUrl) {
-                            handleImageClick(item.id, item.imageUrl, item.name)
-                          }
-                        }}
-                        className={`shrink-0 w-16 h-16 bg-gray-100 rounded-lg border-2 border-gray-200 flex items-center justify-center overflow-hidden ${
-                          item.imageUrl ? 'cursor-pointer hover:border-blue-400 transition-colors' : ''
-                        }`}
+                        onClick={() => handleImageClick(item.id, item.imageUrl || null, item.name)}
+                        className="shrink-0 w-16 h-16 bg-gray-100 rounded-lg border-2 border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-400 transition-colors"
                       >
                         {item.imageUrl ? (
                           <img
@@ -720,7 +723,8 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           onClose={() => {
             setIsImageViewerOpen(false)
             setViewingImage(null)
-            setIsManuallyLocked(false)
+            // Restaurar el estado de bloqueo que había antes de abrir la imagen
+            setIsManuallyLocked(lockStateBeforeImage)
           }}
           onImageUpdate={(newUrl) => handleImageUpdate(viewingImage.productId, newUrl)}
           getUpdatedRect={() => imageRefs.current[viewingImage.productId]?.getBoundingClientRect() || null}
