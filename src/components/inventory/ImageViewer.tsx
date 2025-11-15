@@ -614,12 +614,30 @@ export default function ImageViewer({
           }
         }
 
+        @keyframes overlayFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes overlayFadeOut {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+
         .animate-slideUp {
           animation: slideUp 0.25s ease-out;
         }
 
         .animate-slideDown {
           animation: slideDown 0.2s ease-in forwards;
+        }
+
+        .animate-overlayFadeIn {
+          animation: overlayFadeIn 0.2s ease-out;
+        }
+
+        .animate-overlayFadeOut {
+          animation: overlayFadeOut 0.2s ease-out forwards;
         }
 
         @keyframes fadeInUp {
@@ -798,7 +816,7 @@ export default function ImageViewer({
       {showOptions && !uploading && (
         <>
           <div
-            className="fixed inset-0 bg-black/50 z-112"
+            className={`fixed inset-0 bg-black/50 z-112 ${isClosingOptions ? 'animate-overlayFadeOut' : 'animate-overlayFadeIn'}`}
             onClick={(e) => {
               e.stopPropagation()
               closeOptions()
