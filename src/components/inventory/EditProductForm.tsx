@@ -74,7 +74,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Validación manual
     if (!formData.name.trim()) {
       setError('El nombre del producto es requerido')
       return
@@ -83,7 +82,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
     setLoading(true)
     setError(null)
 
-    // Eliminar imagen anterior si fue marcada para eliminación
     if (oldImageToDelete) {
       console.log('🗑️ Eliminando imagen anterior de R2 al confirmar guardado...')
       try {
@@ -113,7 +111,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
   }
 
   const handleCancel = async () => {
-    // Si hay una imagen nueva que no se guardó, eliminarla
     if (imageUrl && imageUrl !== product.image_url) {
       console.log('🗑️ Cancelando: eliminando imagen temporal de R2...')
       try {
@@ -145,7 +142,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
         onClick={(e) => e.stopPropagation()}
       >
         <div className="pb-32 md:p-6 md:pb-6">
-          {/* Header */}
           <div className="flex justify-between items-center mb-4 md:mb-6 bg-gray-100 md:bg-transparent px-4 md:px-0 py-5 md:py-0">
             <h2 className="text-3xl md:text-2xl font-bold text-gray-900">Editar Producto</h2>
             <button
@@ -166,7 +162,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4 px-4 md:px-0">
-            {/* Stock Actual y Stock Mínimo - Tarjetas */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gray-50 rounded-lg p-4 border-2 border-yellow-400">
                 <input
@@ -201,7 +196,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
               </div>
             </div>
 
-            {/* Nombre del Producto */}
             <div>
               <label htmlFor="name" className="block text-xs font-medium text-gray-500 mb-2 uppercase">
                 Nombre del Producto *
@@ -217,7 +211,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
               />
             </div>
 
-            {/* Código Único y Código de Barra */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="code" className="block text-xs font-medium text-gray-500 mb-2 uppercase">
@@ -250,7 +243,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
               </div>
             </div>
 
-            {/* Precio Venta y Precio Costo - Tarjetas */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gray-50 rounded-lg p-4 border-2 border-green-400">
                 <input
@@ -287,7 +279,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
               </div>
             </div>
 
-            {/* Categoría y Unidad de Medida */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="category" className="block text-xs font-medium text-gray-500 mb-2 uppercase">
@@ -317,7 +308,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
               </div>
             </div>
 
-            {/* Imagen del Producto */}
             <div>
               {imageUrl ? (
                 <div>
@@ -330,6 +320,7 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
                     className="relative w-32 h-32 cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 hover:border-blue-400 transition-colors"
                   >
                     <img
+                      key={imageUrl}
                       src={imageUrl}
                       alt="Vista previa del producto"
                       className="w-full h-full object-cover"
@@ -352,7 +343,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
               )}
             </div>
 
-            {/* Producto Activo */}
             <div className="flex items-center pt-2">
               <input
                 type="checkbox"
@@ -367,7 +357,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
               </label>
             </div>
 
-            {/* Botones */}
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t sticky bottom-0 bg-white pb-4 px-4 -mx-4 md:px-0 md:mx-0">
               <button
                 type="button"
@@ -407,7 +396,6 @@ export default function EditProductForm({ product, onClose, onSuccess }: EditPro
           }}
           onImageUpdate={(newUrl) => {
             setImageUrl(newUrl)
-            // No cerrar aquí - el ImageViewer se cierra solo después del checkmark.
           }}
           originRect={imageOriginRect}
           getUpdatedRect={() => imageRef.current?.getBoundingClientRect() || null}

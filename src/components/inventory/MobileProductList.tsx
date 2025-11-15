@@ -26,7 +26,6 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
   const [localProducts, setLocalProducts] = useState(products)
   const imageRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  // Sincronizar con props cuando cambien
   useState(() => {
     setLocalProducts(products)
   })
@@ -59,7 +58,6 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
     })
   }
 
-  // 🆕 Callback para actualizar la imagen localmente
   const handleImageUpdate = (productId: string, newImageUrl: string) => {
     setLocalProducts(prevProducts => 
       prevProducts.map(product => 
@@ -69,7 +67,6 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
       )
     )
     
-    // También actualizar la vista de imagen si está abierta
     if (viewingImage && viewingImage.productId === productId) {
       setViewingImage({
         ...viewingImage,
@@ -149,6 +146,7 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
                       >
                         {product.image_url ? (
                           <img 
+                            key={product.image_url}
                             src={product.image_url} 
                             alt={product.name}
                             className="w-full h-full object-cover"
@@ -286,6 +284,7 @@ export default function MobileProductList({ products, onProductDeleted, onProduc
           originRect={viewingImage.originRect}
           onClose={() => setViewingImage(null)}
           onImageUpdate={(newUrl) => handleImageUpdate(viewingImage.productId, newUrl)}
+          getUpdatedRect={() => imageRefs.current[viewingImage.productId]?.getBoundingClientRect() || null}
         />
       )}
     </>

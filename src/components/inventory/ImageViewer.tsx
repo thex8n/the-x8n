@@ -35,7 +35,6 @@ export default function ImageViewer({
   const [hasOpenedOnce, setHasOpenedOnce] = useState(false)
   const [closingRect, setClosingRect] = useState<DOMRect | null>(null)
 
-  // Estados para zoom y pan
   const [scale, setScale] = useState(1)
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
@@ -51,7 +50,6 @@ export default function ImageViewer({
   const wheelAnimationFrameRef = useRef<number | null>(null)
   const isMountedRef = useRef(true)
 
-  // Rastrear si el componente está montado
   useEffect(() => {
     isMountedRef.current = true
     return () => {
@@ -59,7 +57,6 @@ export default function ImageViewer({
     }
   }, [])
 
-  // Bloquear scroll y zoom del viewport
   useEffect(() => {
     const scrollY = window.scrollY
     const scrollX = window.scrollX
@@ -80,7 +77,6 @@ export default function ImageViewer({
     htmlElement.style.top = `-${scrollY}px`
     htmlElement.style.left = `-${scrollX}px`
 
-    // Prevenir zoom del viewport en móvil
     let viewportMeta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement
     const originalContent = viewportMeta?.content || ''
 
@@ -88,7 +84,6 @@ export default function ImageViewer({
       viewportMeta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
     }
 
-    // Prevenir gestos de zoom en iOS
     const preventZoom = (e: TouchEvent) => {
       if (e.touches.length > 1) {
         e.preventDefault()
@@ -110,14 +105,12 @@ export default function ImageViewer({
         mainElement.style.overflow = 'unset'
       }
 
-      // Restaurar viewport original
       if (viewportMeta && originalContent) {
         viewportMeta.content = originalContent
       }
 
       document.removeEventListener('touchmove', preventZoom)
       
-      // Limpiar animación pendiente
       if (wheelAnimationFrameRef.current) {
         cancelAnimationFrame(wheelAnimationFrameRef.current)
       }
@@ -126,14 +119,14 @@ export default function ImageViewer({
     }
   }, [])
 
-  // Marcar que ya se abrió después de la animación inicial
   useEffect(() => {
     const timer = setTimeout(() => {
       setHasOpenedOnce(true)
-    }, 250) // Después de la animación de entrada (200ms)
+    }, 250)
     
     return () => clearTimeout(timer)
   }, [])
+
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !showOptions && !showCropModal) handleClose()
@@ -145,15 +138,12 @@ export default function ImageViewer({
   const handleClose = () => {
     if (uploading) return
 
-    // Capturar el rect actualizado justo antes de cerrar
     const updatedRect = getUpdatedRect ? getUpdatedRect() : null
     if (updatedRect) {
       setClosingRect(updatedRect)
     }
 
-    // Usar requestAnimationFrame para asegurar que el reset y el cierre ocurran en el mismo frame
     requestAnimationFrame(() => {
-      // Resetear zoom antes de cerrar para la animación (exactamente 1 para activar animación)
       setScale(1)
       setPosition({ x: 0, y: 0 })
       setIsClosing(true)
@@ -170,36 +160,28 @@ export default function ImageViewer({
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Crear URL temporal para el crop
     const tempUrl = URL.createObjectURL(file)
     setTempImageUrl(tempUrl)
     setShowOptions(false)
     setShowCropModal(true)
   }
 
+  // ✅ SOLUCIÓN APLICADA AQUÍ
   const handleCropComplete = async (croppedBlob: Blob) => {
     setError(null)
     setShowCropModal(false)
 
-    // ✨ MAGIA: Mostrar spinner por 1s, luego la imagen (mientras sube en segundo plano)
     const localUrl = URL.createObjectURL(croppedBlob)
     setUploading(true)
 
-    // Esperar 1 segundo para crear la ilusión de carga rápida
     setTimeout(() => {
-      // Solo actualizar si el componente sigue montado
       if (isMountedRef.current) {
         setCurrentImage(localUrl)
         setUploading(false)
-
-        // 🎯 Actualizar la lista con la imagen local (solo si el visor sigue abierto)
-        if (onImageUpdate && productId) {
-          onImageUpdate(localUrl)
-        }
+        // ⚠️ NO actualizar lista con blob: URL
       }
     }, 1000)
 
-    // Mientras tanto, subir en segundo plano
     try {
       const formData = new FormData()
       formData.append('file', croppedBlob, 'product.webp')
@@ -207,56 +189,54 @@ export default function ImageViewer({
       const uploadResult = await uploadProductImage(formData)
 
       if (uploadResult.success && uploadResult.url) {
-        // Reemplazar URL local con URL del servidor silenciosamente
-        URL.revokeObjectURL(localUrl)
+        // ✅ SOLUCIÓN 1: Cache-busting con timestamp
+        const cacheBustedUrl = uploadResult.url + '?t=' + Date.now()
 
-        // Solo actualizar estado si el componente sigue montado
         if (isMountedRef.current) {
-          setCurrentImage(uploadResult.url)
+          setCurrentImage(cacheBustedUrl)
 
-          // Actualizar la lista con la URL del servidor (solo si el visor sigue abierto)
-          if (onImageUpdate && productId) {
-            onImageUpdate(uploadResult.url)
+          // 🎯 Actualizar lista con URL del servidor (cache-busted)
+          if (onImageUpdate) {
+            onImageUpdate(cacheBustedUrl)
           }
         }
 
-        // Si NO hay productId, solo actualizar localmente (para formulario de agregar)
-        if (!productId) {
-          // No hacer nada más, ya está actualizado localmente
-        } else {
-          // Si hay productId, actualizar en la base de datos (producto existente)
+        // 🗑️ SOLUCIÓN 4: Revocar blob: DESPUÉS con delay
+        setTimeout(() => {
+          URL.revokeObjectURL(localUrl)
+        }, 100)
+
+        if (productId) {
           const updateResult = await updateProductImage(productId, uploadResult.url)
 
-          if (updateResult.success) {
-            // Actualización exitosa en el servidor
-          } else {
-            // Solo actualizar estado si el componente sigue montado
-            if (isMountedRef.current) {
-              setError(updateResult.error || 'Error al actualizar producto')
-              // Revertir a la imagen original si falla
-              URL.revokeObjectURL(localUrl)
-              setCurrentImage(imageUrl)
+          if (!updateResult.success && isMountedRef.current) {
+            setError(updateResult.error || 'Error al actualizar producto')
+            setCurrentImage(imageUrl)
+            if (onImageUpdate) {
+              onImageUpdate(imageUrl)
             }
           }
         }
       } else {
-        // Solo actualizar estado si el componente sigue montado
         if (isMountedRef.current) {
           setError(uploadResult.error || 'Error al subir imagen')
-          // Revertir a la imagen original si falla
-          URL.revokeObjectURL(localUrl)
           setCurrentImage(imageUrl)
+          if (onImageUpdate) {
+            onImageUpdate(imageUrl)
+          }
         }
+        URL.revokeObjectURL(localUrl)
       }
     } catch (err) {
       console.error('Error processing image:', err)
-      // Solo actualizar estado si el componente sigue montado
       if (isMountedRef.current) {
         setError('Error al procesar imagen')
-        // Revertir a la imagen original si falla
-        URL.revokeObjectURL(localUrl)
         setCurrentImage(imageUrl)
+        if (onImageUpdate) {
+          onImageUpdate(imageUrl)
+        }
       }
+      URL.revokeObjectURL(localUrl)
     } finally {
       if (tempImageUrl) {
         URL.revokeObjectURL(tempImageUrl)
@@ -273,20 +253,17 @@ export default function ImageViewer({
     fileInputRef.current?.click()
   }
 
-  // Resetear zoom cuando cambia la imagen
   useEffect(() => {
     setScale(1)
     setPosition({ x: 0, y: 0 })
   }, [currentImage])
 
-  // Función para obtener la distancia entre dos puntos táctiles
   const getDistance = (touch1: React.Touch, touch2: React.Touch) => {
     const dx = touch1.clientX - touch2.clientX
     const dy = touch1.clientY - touch2.clientY
     return Math.sqrt(dx * dx + dy * dy)
   }
 
-  // Función para calcular límites de pan
   const calculatePanLimits = () => {
     if (!imageContainerRef.current || scale <= 1) {
       return { minX: 0, maxX: 0, minY: 0, maxY: 0 }
@@ -320,16 +297,13 @@ export default function ImageViewer({
     }
   }
 
-  // Manejar zoom con rueda del mouse
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
     
     const now = Date.now()
     const timeSinceLastWheel = now - lastWheelTimeRef.current
     
-    // Si han pasado más de 150ms desde el último wheel, es un nuevo gesto de zoom
     if (timeSinceLastWheel > 150 || !wheelFocalPointRef.current) {
-      // Guardar el punto focal SOLO al inicio del gesto
       if (imageContainerRef.current) {
         const rect = imageContainerRef.current.getBoundingClientRect()
         wheelFocalPointRef.current = {
@@ -341,32 +315,23 @@ export default function ImageViewer({
     }
     
     lastWheelTimeRef.current = now
-    
-    // Acumular el delta para suavizar
     accumulatedDeltaRef.current += e.deltaY
     
-    // Cancelar animación anterior si existe
     if (wheelAnimationFrameRef.current) {
       cancelAnimationFrame(wheelAnimationFrameRef.current)
     }
     
-    // Aplicar zoom en el siguiente frame para mejor rendimiento
     wheelAnimationFrameRef.current = requestAnimationFrame(() => {
       const delta = accumulatedDeltaRef.current * -0.001
-      
-      // Resetear acumulador
       accumulatedDeltaRef.current = 0
       
-      // Solo aplicar si el cambio es significativo
       if (Math.abs(delta) < 0.01) return
       
       const previousScale = scale
       const newScale = Math.min(Math.max(1, scale + delta), 5)
       
-      // Solo actualizar si hay un cambio real de escala
       if (Math.abs(newScale - previousScale) < 0.02) return
       
-      // Usar el punto focal guardado SOLO para zoom IN
       if (wheelFocalPointRef.current && newScale > previousScale) {
         const { x, y } = wheelFocalPointRef.current
         const factor = (newScale - previousScale) / previousScale
@@ -376,7 +341,6 @@ export default function ImageViewer({
         }
         setPosition(applyPanLimits(newPosition))
       } else if (newScale < previousScale) {
-        // Para zoom OUT, solo ajustar límites sin cambiar el centro
         const scaleFactor = newScale / previousScale
         const newPosition = {
           x: position.x * scaleFactor,
@@ -395,7 +359,6 @@ export default function ImageViewer({
     })
   }
 
-  // Manejar inicio de pan (mouse)
   const handleMouseDown = (e: React.MouseEvent) => {
     if (scale > 1) {
       setIsPanning(true)
@@ -403,7 +366,6 @@ export default function ImageViewer({
     }
   }
 
-  // Manejar movimiento de pan (mouse)
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isPanning && scale > 1) {
       const newPosition = {
@@ -414,12 +376,10 @@ export default function ImageViewer({
     }
   }
 
-  // Manejar fin de pan (mouse)
   const handleMouseUp = () => {
     setIsPanning(false)
   }
 
-  // Manejar pinch-to-zoom y pan (touch)
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length > 1) {
       e.preventDefault()
@@ -489,7 +449,6 @@ export default function ImageViewer({
     }
   }
 
-  // Doble tap para zoom
   const lastTapRef = useRef<number>(0)
   const handleDoubleTap = (e: React.MouseEvent | React.TouchEvent) => {
     const now = Date.now()
@@ -527,7 +486,6 @@ export default function ImageViewer({
           setPosition(applyPanLimits(newPosition))
         }
       } else {
-        // Quitar zoom con un valor ligeramente diferente de 1 para evitar animación de entrada
         setScale(1.0000001)
         setPosition({ x: 0, y: 0 })
       }
@@ -535,14 +493,9 @@ export default function ImageViewer({
     lastTapRef.current = now
   }
 
-  // 🎬 ANIMACIONES VERSIÓN 1 - SIN CAMBIOS EN EL CONTENEDOR
   const getImageStyle = () => {
-    // Solo aplicar animación cuando NO hay zoom activo (scale debe ser exactamente 1)
     if (scale > 1.001 || scale < 0.999) return {}
-    
-    // Si ya se abrió una vez, no aplicar animación de entrada
     if (hasOpenedOnce && !isClosing) return {}
-    
     if (!originRect) return {}
 
     const windowWidth = window.innerWidth
@@ -552,7 +505,6 @@ export default function ImageViewer({
     const centerY = windowHeight / 2
 
     if (isClosing) {
-      // Usar closingRect si está disponible, sino usar originRect
       const targetRect = closingRect || originRect
       const targetX = targetRect.left + targetRect.width / 2
       const targetY = targetRect.top + targetRect.height / 2
@@ -583,7 +535,6 @@ export default function ImageViewer({
     const originX = originRect.left + originRect.width / 2
     const originY = originRect.top + originRect.height / 2
 
-    // Usar el tamaño real del thumbnail del origen
     const thumbnailSize = originRect.width || 80
     const initialScale = thumbnailSize / Math.min(windowWidth, windowHeight)
     
@@ -635,7 +586,6 @@ export default function ImageViewer({
         onTouchMove={(e) => e.preventDefault()}
       />
 
-      {/* Header fijo - fuera del contenedor de zoom */}
       <div
         className="fixed top-4 left-4 right-4 z-112 flex items-center justify-between"
         style={{
@@ -643,7 +593,6 @@ export default function ImageViewer({
           transition: 'opacity 0.15s ease-out'
         }}
       >
-        {/* Left: Back arrow + texto */}
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -657,7 +606,6 @@ export default function ImageViewer({
           <span className="text-white font-medium text-sm">Imagen del producto</span>
         </button>
 
-        {/* Right: Pencil edit button */}
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -674,7 +622,6 @@ export default function ImageViewer({
       <div
         className="fixed inset-0 z-111 flex items-center justify-center p-4"
         onClick={(e) => {
-          // Cerrar si el clic fue directamente en este contenedor (no en la imagen)
           if (e.target === e.currentTarget) {
             e.stopPropagation()
             handleClose()
@@ -702,7 +649,6 @@ export default function ImageViewer({
           onTouchEnd={handleTouchEnd}
         >
 
-          {/* Mostrar imagen solo si NO está subiendo */}
           {!uploading && (
             <img
               src={currentImage}
@@ -718,7 +664,6 @@ export default function ImageViewer({
             />
           )}
 
-          {/* Spinner mientras sube - ilusión de carga rápida */}
           {uploading && (
             <div className="flex items-center justify-center w-full h-full min-h-[400px]">
               <Loader2 className="w-12 h-12 text-white animate-spin" />
@@ -802,7 +747,6 @@ export default function ImageViewer({
         className="hidden"
       />
 
-      {/* MODAL DE CROP - ESTILO WHATSAPP */}
       {showCropModal && tempImageUrl && (
         <ImageCropModal
           imageUrl={tempImageUrl}

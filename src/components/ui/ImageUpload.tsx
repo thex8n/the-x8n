@@ -28,13 +28,13 @@ export default function ImageUpload({
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Crear URL temporal para el crop
     const tempUrl = URL.createObjectURL(file)
     setTempImageUrl(tempUrl)
     setShowOptions(false)
     setShowCropModal(true)
   }
 
+  // ✅ SOLUCIÓN APLICADA AQUÍ
   const handleCropComplete = async (croppedBlob: Blob) => {
     setError(null)
     setUploading(true)
@@ -47,11 +47,14 @@ export default function ImageUpload({
       const result = await uploadProductImage(formData)
 
       if (result.success && result.url) {
-        // Si hay una imagen anterior, marcarla para eliminación
+        // ✅ SOLUCIÓN 1: Cache-busting con timestamp
+        const cacheBustedUrl = result.url + '?t=' + Date.now()
+
         if (currentImageUrl) {
           onOldImageDelete?.(currentImageUrl)
         }
-        onImageChange(result.url)
+
+        onImageChange(cacheBustedUrl)
       } else {
         setError(result.error || 'Error al subir imagen')
       }
@@ -60,9 +63,13 @@ export default function ImageUpload({
       setError('Error al procesar imagen')
     } finally {
       setUploading(false)
+      
+      // 🗑️ SOLUCIÓN 4: Revocar tempImageUrl con delay
       if (tempImageUrl) {
-        URL.revokeObjectURL(tempImageUrl)
-        setTempImageUrl(null)
+        setTimeout(() => {
+          URL.revokeObjectURL(tempImageUrl)
+          setTempImageUrl(null)
+        }, 100)
       }
     }
   }
@@ -91,10 +98,8 @@ export default function ImageUpload({
         Imagen del Producto
       </label>
 
-      {/* Vista previa de la imagen */}
       {currentImageUrl && !uploading && (
         <div className="relative inline-block">
-          {/* Imagen clickeable para cambiar */}
           <button
             type="button"
             onClick={() => setShowOptions(true)}
@@ -105,13 +110,11 @@ export default function ImageUpload({
               alt="Vista previa"
               className="w-32 h-32 object-cover rounded-lg border-2 border-gray-200 group-hover:border-gray-300 transition-colors"
             />
-            {/* Overlay al hacer hover */}
             <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <ImagePlus className="w-8 h-8 text-white" />
             </div>
           </button>
           
-          {/* Botón X para eliminar */}
           <button
             type="button"
             onClick={handleRemoveImage}
@@ -123,17 +126,14 @@ export default function ImageUpload({
         </div>
       )}
 
-      {/* Estado de carga */}
       {uploading && (
         <div className="flex items-center justify-center w-32 h-32 bg-gray-100 rounded-lg border-2 border-gray-200">
           <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
         </div>
       )}
 
-      {/* Cuadro para agregar imagen */}
       {!currentImageUrl && !uploading && (
         <div className="relative">
-          {/* Cuadro clickeable */}
           <button
             type="button"
             onClick={() => setShowOptions(!showOptions)}
@@ -143,26 +143,20 @@ export default function ImageUpload({
             <span className="text-xs text-gray-500 group-hover:text-gray-700 font-medium">Agregar</span>
           </button>
 
-          {/* Bottom Sheet Modal */}
           {showOptions && (
             <>
-              {/* Overlay oscuro */}
               <div
                 className="fixed inset-0 bg-black/50 z-100 animate-fadeIn"
                 onClick={() => setShowOptions(false)}
               />
               
-              {/* Bottom Sheet - Más compacto */}
               <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-101 animate-slideUp shadow-2xl">
-                {/* Handle bar */}
                 <div className="flex justify-center pt-2 pb-3">
                   <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
                 </div>
 
-                {/* Opciones - Sin título, más compacto */}
                 <div className="px-2 pb-6">
                   <div className="grid grid-cols-2 gap-4 px-4">
-                    {/* Tomar Foto */}
                     <button
                       type="button"
                       onClick={handleTakePhoto}
@@ -174,7 +168,6 @@ export default function ImageUpload({
                       <span className="text-xs text-gray-600 font-medium">Foto</span>
                     </button>
 
-                    {/* Galería */}
                     <button
                       type="button"
                       onClick={handleChooseFromGallery}
@@ -193,26 +186,20 @@ export default function ImageUpload({
         </div>
       )}
 
-      {/* Bottom Sheet Modal - Unificado para agregar o cambiar */}
       {showOptions && (
         <>
-          {/* Overlay oscuro */}
           <div
             className="fixed inset-0 bg-black/50 z-100 animate-fadeIn"
             onClick={() => setShowOptions(false)}
           />
           
-          {/* Bottom Sheet - Más compacto */}
           <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-101 animate-slideUp shadow-2xl">
-            {/* Handle bar */}
             <div className="flex justify-center pt-2 pb-3">
               <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
             </div>
 
-            {/* Opciones - Sin título, más compacto */}
             <div className="px-2 pb-6">
               <div className="grid grid-cols-2 gap-4 px-4">
-                {/* Tomar Foto */}
                 <button
                   type="button"
                   onClick={handleTakePhoto}
@@ -224,7 +211,6 @@ export default function ImageUpload({
                   <span className="text-xs text-gray-600 font-medium">Foto</span>
                 </button>
 
-                {/* Galería */}
                 <button
                   type="button"
                   onClick={handleChooseFromGallery}
@@ -241,7 +227,6 @@ export default function ImageUpload({
         </>
       )}
 
-      {/* Input oculto para cámara */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -251,7 +236,6 @@ export default function ImageUpload({
         className="hidden"
       />
 
-      {/* Input oculto para galería */}
       <input
         ref={fileInputRef}
         type="file"
@@ -260,19 +244,16 @@ export default function ImageUpload({
         className="hidden"
       />
 
-      {/* Mensaje de error */}
       {error && (
         <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-800 text-sm">{error}</p>
         </div>
       )}
 
-      {/* Información */}
       <p className="text-xs text-gray-500 mt-2">
         Formatos: JPG, PNG, WebP • Tamaño máximo: 5MB • Se optimizará a 800×800px
       </p>
 
-      {/* Estilos para animaciones */}
       <style jsx>{`
         @keyframes fadeIn {
           from {
@@ -301,7 +282,6 @@ export default function ImageUpload({
         }
       `}</style>
 
-      {/* MODAL DE CROP - ESTILO WHATSAPP */}
       {showCropModal && tempImageUrl && (
         <ImageCropModal
           imageUrl={tempImageUrl}
@@ -317,4 +297,4 @@ export default function ImageUpload({
       )}
     </div>
   )
-} 
+}

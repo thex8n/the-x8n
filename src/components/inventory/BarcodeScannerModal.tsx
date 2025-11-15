@@ -23,7 +23,6 @@ interface ScannedProduct {
   imageUrl?: string | null
 }
 
-// 🆕 Nueva interfaz para productos agrupados
 interface GroupedProduct {
   id: string
   name: string
@@ -33,7 +32,7 @@ interface GroupedProduct {
   lastTimestamp: Date
   initialStock: number
   currentStock: number
-  incrementCount: number  // +1, +2, +3...
+  incrementCount: number
 }
 
 export default function BarcodeScannerModal({ onClose, onProductNotFound, onStockUpdated, initialHistory = [], isPaused = false }: BarcodeScannerModalProps) {
@@ -44,7 +43,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null)
   const [scanHistory, setScanHistory] = useState<ScannedProduct[]>(initialHistory)
   
-  // 🆕 Estado para productos agrupados (lo que se muestra en UI)
   const [groupedProducts, setGroupedProducts] = useState<Map<string, GroupedProduct>>(new Map())
   
   const [showConfirmClose, setShowConfirmClose] = useState(false)
@@ -53,7 +51,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
   const [scannedProductIds, setScannedProductIds] = useState<Set<string>>(new Set())
   const [newProductBarcodes, setNewProductBarcodes] = useState<Set<string>>(new Set())
 
-  // 🖼️ Estados para ImageViewer
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
   const [viewingImage, setViewingImage] = useState<{
     url: string
@@ -243,7 +240,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
 
         const stockAfter = updateResult.data?.stock_quantity || stockBefore + 1
 
-        // 💾 Guardar en D1 (cada escaneo individual)
         await saveInventoryHistoryD1(
           findResult.data.id,
           findResult.data.name,
@@ -253,7 +249,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           findResult.data.image_url
         )
 
-        // 📝 Guardar en historial local (cada escaneo)
         setScanHistory(prev => {
           const newHistory = [{
             id: findResult.data.id,
@@ -270,14 +265,12 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           return newHistory
         })
 
-        // 🆕 Actualizar productos agrupados (para UI)
         setGroupedProducts(prev => {
           const newMap = new Map(prev)
           const productId = findResult.data.id
           const existing = newMap.get(productId)
 
           if (existing) {
-            // Producto ya existe: incrementar contador y actualizar stock
             newMap.set(productId, {
               ...existing,
               lastTimestamp: new Date(),
@@ -285,7 +278,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
               incrementCount: existing.incrementCount + 1
             })
           } else {
-            // Producto nuevo: crear entrada
             newMap.set(productId, {
               id: productId,
               name: findResult.data.name,
@@ -324,27 +316,22 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
 
         setTimeout(() => {
           if (onProductNotFound) {
-            // Crear función callback para agregar al historial
             const handleHistoryAdd = (newItem: ScannedProduct) => {
-              // Agregar al historial local
               setScanHistory(prev => {
                 const newHistory = [newItem, ...prev]
                 localStorage.setItem('scanner_history', JSON.stringify(newHistory))
                 return newHistory
               })
 
-              // Actualizar productos agrupados
               setGroupedProducts(prev => {
                 const newMap = new Map(prev)
                 const existing = newMap.get(newItem.id)
 
                 if (existing) {
-                  // Actualizar producto existente
                   existing.lastTimestamp = newItem.timestamp
                   existing.currentStock = newItem.stockAfter
                   existing.incrementCount += 1
                 } else {
-                  // Crear nuevo producto agrupado
                   newMap.set(newItem.id, {
                     id: newItem.id,
                     name: newItem.name,
@@ -437,12 +424,10 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     }
   }
 
-  // 🖼️ Función para abrir el visor de imagen
   const handleImageClick = (productId: string, imageUrl: string, productName: string) => {
     const imgElement = imageRefs.current[productId]
     const rect = imgElement?.getBoundingClientRect() || null
 
-    // 🔒 Bloquear la cámara al abrir el ImageViewer
     setIsManuallyLocked(true)
 
     setViewingImage({
@@ -454,7 +439,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     setIsImageViewerOpen(true)
   }
 
-  // 🖼️ Función para actualizar la imagen de un producto
+  // ✅ SOLUCIÓN APLICADA: Actualizar imagen en el estado agrupado
   const handleImageUpdate = (productId: string, newImageUrl: string) => {
     setGroupedProducts(prev => {
       const newMap = new Map(prev)
@@ -466,7 +451,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
     })
   }
 
-  // 🆕 Convertir Map a Array para renderizar (ordenado por último escaneo)
   const groupedProductsArray = Array.from(groupedProducts.values()).sort(
     (a, b) => b.lastTimestamp.getTime() - a.lastTimestamp.getTime()
   )
@@ -664,7 +648,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                     className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-start gap-3">
-                      {/* Imagen del producto */}
                       <div
                         ref={(el) => {
                           imageRefs.current[item.id] = el
@@ -680,6 +663,7 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                       >
                         {item.imageUrl ? (
                           <img
+                            key={item.imageUrl}
                             src={item.imageUrl}
                             alt={item.name}
                             className="w-full h-full object-cover"
@@ -689,7 +673,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                         )}
                       </div>
 
-                      {/* Información del producto */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between mb-1">
                           <h4 className="font-semibold text-gray-900 text-sm">{item.name}</h4>
@@ -703,7 +686,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
                         </div>
                         <p className="text-xs text-gray-600 mb-2 font-mono">{item.barcode}</p>
                         
-                        {/* 🆕 NUEVO FORMATO: +X | Total: Y */}
                         <div className="flex items-center gap-3 text-sm">
                           <div className="flex items-center gap-1.5">
                             <span className="text-gray-600">Stock:</span>
@@ -729,7 +711,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
         </div>
       </div>
 
-      {/* 🖼️ ImageViewer Modal */}
       {isImageViewerOpen && viewingImage && (
         <ImageViewer
           imageUrl={viewingImage.url}
@@ -739,7 +720,6 @@ export default function BarcodeScannerModal({ onClose, onProductNotFound, onStoc
           onClose={() => {
             setIsImageViewerOpen(false)
             setViewingImage(null)
-            // 🔓 Desbloquear la cámara al cerrar el ImageViewer
             setIsManuallyLocked(false)
           }}
           onImageUpdate={(newUrl) => handleImageUpdate(viewingImage.productId, newUrl)}
